@@ -1,0 +1,55 @@
+services:
+  frontend:
+    build: ./frontend
+    container_name: foodapp_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - backend
+    networks:
+      - foodapp-network
+
+  backend:
+    build: ./backend
+    container_name: foodapp_backend
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodapp
+      NODE_ENV: development
+    depends_on:
+      - db
+    networks:
+      - foodapp-network
+
+  db:
+    image: postgres:16
+    container_name: foodapp_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: foodapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - foodapp-network
+
+volumes:
+  postgres_data:
+
+networks:
+  foodapp-network:
+    driver: bridge
