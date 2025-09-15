@@ -14,10 +14,10 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">กำลังโหลด...</p>
+          <p className="text-muted-foreground">กำลังโหลด...</p>
         </div>
       </div>
     );
@@ -35,20 +35,20 @@ export default function Home() {
   console.log('Rendering login/register page - no user found');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center">
+    <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="max-w-md w-full space-y-8 p-8">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">ZeenZilla</h1>
-          <p className="text-gray-600 mb-8">ระบบสั่งอาหารออนไลน์</p>
+          <h1 className="text-4xl font-bold text-foreground mb-2">ZeenZilla</h1>
+          <p className="text-muted-foreground mb-8">ระบบสั่งอาหารออนไลน์</p>
         </div>
         
         <Card className="p-8">
           <div className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+              <h2 className="text-2xl font-semibold text-card-foreground mb-2">
                 ยินดีต้อนรับ
               </h2>
-              <p className="text-gray-600">
+              <p className="text-muted-foreground">
                 เข้าสู่ระบบหรือสมัครสมาชิกเพื่อเริ่มใช้งาน
               </p>
             </div>

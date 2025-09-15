@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { User, LoginRequest, RegisterRequest } from '@/lib/types'
 import { apiService } from '@/lib/api'
 import { toast } from 'react-hot-toast'
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
 
   const isAuthenticated = !!user
 
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     apiService.logout()
     setUser(null)
     toast.success('ออกจากระบบสำเร็จ')
+    router.push('/')
   }
 
   const checkAuth = async () => {
