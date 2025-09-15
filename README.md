@@ -32,7 +32,7 @@
 
 ```bash
 # เข้าไปในโฟลเดอร์โปรเจ็กต์
-cd /c/Users/thann/Desktop/MyProject/Foodapp
+cd /c/Users/yourusers/Foodapp
 
 # รันโปรเจ็กต์ด้วย Docker Compose
 docker-compose up --build
