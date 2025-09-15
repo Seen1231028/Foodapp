@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // admin, shop_owner, customer, finance
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  users User[]
+  
+  @@map("roles")
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  username   String    @unique
+  email      String    @unique
+  password   String    // Will be hashed
+  fullName   String
+  phone      String?
+  isActive   Boolean   @default(true)
+  lastLogin  DateTime?
+  roleId     Int
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  
+  role   Role    @relation(fields: [roleId], references: [id])
+  orders Order[]
+  
+  @@map("users")
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  menus Menu[]
+  
+  @@map("categories")
+}
+
+model Menu {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  price        Decimal  @db.Decimal(10, 2)
+  image        String?  // URL to image
+  isAvailable  Boolean  @default(true)
+  isActive     Boolean  @default(true)
+  preparationTime Int   @default(15) // minutes
+  categoryId   Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  category   Category    @relation(fields: [categoryId], references: [id])
+  orderItems OrderItem[]
+  
+  @@map("menus")
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  orderNumber String      @unique // Generated order number
+  userId      Int
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal     @db.Decimal(10, 2)
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  user     User        @relation(fields: [userId], references: [id])
+  items    OrderItem[]
+  payments Payment[]
+  
+  @@map("orders")
+}
+
+model OrderItem {
+  id       Int     @id @default(autoincrement())
+  orderId  Int
+  menuId   Int
+  quantity Int
+  price    Decimal @db.Decimal(10, 2) // Price at time of order
+  notes    String?
+  
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menu  Menu  @relation(fields: [menuId], references: [id])
+  
+  @@map("order_items")
+}
+
+model Payment {
+  id            Int           @id @default(autoincrement())
+  orderId       Int
+  amount        Decimal       @db.Decimal(10, 2)
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  transactionId String?       // Payment gateway transaction ID
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  order Order @relation(fields: [orderId], references: [id])
+  
+  @@map("payments")
+}
+
+model SystemSetting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  type      String   @default("string") // string, number, boolean, json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("system_settings")
+}
+
+// Enums
+enum OrderStatus {
+  PENDING       // รอการยืนยัน
+  CONFIRMED     // ยืนยันแล้ว
+  PREPARING     // กำลังเตรียม
+  READY         // พร้อมรับ
+  COMPLETED     // สำเร็จ
+  CANCELLED     // ยกเลิก
+}
+
+enum PaymentMethod {
+  CASH          // เงินสด
+  CREDIT_CARD   // บัตรเครดิต
+  DEBIT_CARD    // บัตรเดบิต
+  BANK_TRANSFER // โอนเงิน
+  WALLET        // กระเป๋าเงินอิเล็กทรอนิกส์
+}
+
+enum PaymentStatus {
+  PENDING   // รอชำระ
+  PAID      // ชำระแล้ว
+  FAILED    // ชำระไม่สำเร็จ
+  REFUNDED  // คืนเงินแล้ว
+}

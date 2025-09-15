@@ -180,3 +180,5 @@ playwright-report/
 # === MISC ===
 *.tgz
 *.tar.gz
+Techstack.md
+DEMO_CREDENTIALS.md

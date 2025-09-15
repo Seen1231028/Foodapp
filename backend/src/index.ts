@@ -1,47 +1,53 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
+import { authRoutes } from "./routes/auth";
+import { userRoutes } from "./routes/users";
+import { menuRoutes } from "./routes/menus";
+import { orderRoutes } from "./routes/orders";
 
 const app = new Elysia()
   .use(cors({
-    origin: ['http://localhost:3000'],
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
     credentials: true,
   }))
   .get("/", () => ({ 
-    message: "Food App API is running!" 
+    message: "🍔 ZeenZilla Food App API is running!",
+    version: "1.0.0",
+    timestamp: new Date().toISOString()
   }))
   .get("/api/health", () => ({ 
     status: "OK", 
-    timestamp: new Date().toISOString() 
+    service: "ZeenZilla Food API",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
   }))
   .group("/api", (app) =>
     app
-      .get("/menus", () => [
-        {
-          id: 1,
-          name: "ผัดไทย",
-          description: "ผัดไทยแสนอร่อย",
-          price: 60,
-          available: true
-        },
-        {
-          id: 2,
-          name: "ส้มตำ",
-          description: "ส้มตำไทยแท้",
-          price: 50,
-          available: true
-        }
-      ])
-      .post("/auth/login", ({ body }) => ({
-        message: "Login endpoint",
-        data: body
-      }))
-      .post("/auth/register", ({ body }) => ({
-        message: "Register endpoint", 
-        data: body
-      }))
+      .use(authRoutes)
+      .use(userRoutes)
+      .use(menuRoutes)
+      .use(orderRoutes)
   )
-  .listen(4000);
+  .onError(({ error, set }) => {
+    console.error('API Error:', error)
+    
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    
+    if (errorMessage.includes('Unauthorized')) {
+      set.status = 401
+      return { error: 'Unauthorized access' }
+    }
+    
+    if (errorMessage.includes('Not found')) {
+      set.status = 404
+      return { error: 'Resource not found' }
+    }
+    
+    set.status = 500
+    return { error: 'Internal server error' }
+  })
+  .listen(process.env.PORT || 4000);
 
 console.log(
-  `🚀 Food App API is running at ${app.server?.hostname}:${app.server?.port}`
+  `🚀 ZeenZilla Food API is running at ${app.server?.hostname}:${app.server?.port}`
 );

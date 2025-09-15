@@ -2,16 +2,21 @@
   "name": "foodapp-backend",
   "version": "1.0.0",
   "scripts": {
-    "dev": "bun run --watch src/index.ts",
+    "dev": "bun run db:generate && bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir ./dist",
     "db:generate": "bunx prisma generate",
     "db:push": "bunx prisma db push",
     "db:migrate": "bunx prisma migrate dev",
-    "db:studio": "bunx prisma studio"
+    "db:studio": "bunx prisma studio",
+    "db:seed": "bunx prisma db seed"
+  },
+  "prisma": {
+    "seed": "bun run prisma/seed.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",
+    "@elysiajs/jwt": "^1.4.0",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "elysia": "latest",
