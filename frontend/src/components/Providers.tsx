@@ -15,13 +15,18 @@ const queryClient = new QueryClient({
   },
 })
 
-export function Providers({ children }: { children: React.ReactNode }) {
+interface ProvidersProps {
+  children: React.ReactNode
+  toasterPosition?: 'top-right' | 'bottom-center'
+}
+
+export function Providers({ children, toasterPosition = 'top-right' }: ProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         {children}
         <Toaster
-          position="top-right"
+          position={toasterPosition}
           toastOptions={{
             duration: 4000,
             style: {

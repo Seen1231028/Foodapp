@@ -44,6 +44,7 @@ export default function RegisterPage() {
     handleSubmit,
     setValue,
     formState: { errors },
+    reset,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
   });
@@ -55,7 +56,12 @@ export default function RegisterPage() {
       roleId: parseInt(roleId),
     });
     if (success) {
-      router.push("/");
+      // เพิ่ม delay เล็กน้อยเพื่อให้ AuthContext อัพเดท user state
+      setTimeout(() => {
+        router.push("/");
+      }, 100);
+    } else {
+      reset();
     }
   };
 
