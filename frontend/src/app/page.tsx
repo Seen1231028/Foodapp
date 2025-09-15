@@ -9,6 +9,9 @@ import Link from "next/link";
 export default function Home() {
   const { user, isLoading } = useAuth();
 
+  // Debug log
+  console.log('Home component - user:', user, 'isLoading:', isLoading);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center">
@@ -21,12 +24,15 @@ export default function Home() {
   }
 
   if (user) {
+    console.log('Rendering dashboard for user:', user.username, 'role:', user.role.name);
     return (
       <DashboardLayout title="ยินดีต้อนรับสู่ ZeenZilla Food App">
         <DashboardCards userRole={user.role.name} />
       </DashboardLayout>
     );
   }
+
+  console.log('Rendering login/register page - no user found');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center">

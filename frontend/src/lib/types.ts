@@ -32,6 +32,15 @@ export interface RegisterRequest {
   roleId?: number
 }
 
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface ResetPasswordRequest {
+  email: string
+  newPassword: string
+}
+
 export interface AuthResponse {
   message: string
   user: User
