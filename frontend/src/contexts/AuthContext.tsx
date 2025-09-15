@@ -26,8 +26,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (data: LoginRequest): Promise<boolean> => {
     try {
       setIsLoading(true)
+      console.log('Login attempt with:', data)
       const response = await apiService.login(data)
+      console.log('Login response:', response)
       setUser(response.user)
+      console.log('User set in context:', response.user)
       toast.success(response.message || 'เข้าสู่ระบบสำเร็จ')
       return true
     } catch (error: any) {

@@ -3,6 +3,8 @@ import {
   User, 
   LoginRequest, 
   RegisterRequest, 
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
   AuthResponse, 
   Menu, 
   Category, 
@@ -116,6 +118,24 @@ class ApiService {
   async logout(): Promise<void> {
     this.clearToken()
     this.clearUser()
+  }
+
+  async forgotPassword(data: { email: string }): Promise<{ message: string }> {
+    try {
+      const response: AxiosResponse<{ message: string }> = await this.api.post('/api/auth/forgot-password', data)
+      return response.data
+    } catch (error) {
+      throw error
+    }
+  }
+
+  async resetPassword(data: { email: string; newPassword: string }): Promise<{ message: string }> {
+    try {
+      const response: AxiosResponse<{ message: string }> = await this.api.post('/api/auth/reset-password', data)
+      return response.data
+    } catch (error) {
+      throw error
+    }
   }
 
   // Menu endpoints

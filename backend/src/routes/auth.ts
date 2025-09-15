@@ -208,4 +208,72 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       set.status = 401;
       return { error: "Token ไม่ถูกต้องหรือหมดอายุ" };
     }
+  })
+  
+  .post("/forgot-password", async ({ body, set }) => {
+    try {
+      const { email } = body as { email: string };
+
+      if (!email) {
+        set.status = 400;
+        return { error: "กรุณากรอกอีเมล" };
+      }
+
+      // Check if email exists
+      const user = await prisma.user.findUnique({
+        where: { email }
+      });
+
+      if (!user) {
+        set.status = 404;
+        return { error: "ไม่พบอีเมลในระบบ" };
+      }
+
+      return {
+        message: "พบอีเมลในระบบ สามารถตั้งรหัสผ่านใหม่ได้"
+      };
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      set.status = 500;
+      return { error: "เกิดข้อผิดพลาดในระบบ" };
+    }
+  })
+  
+  .post("/reset-password", async ({ body, set }) => {
+    try {
+      const { email, newPassword } = body as { email: string; newPassword: string };
+
+      if (!email || !newPassword) {
+        set.status = 400;
+        return { error: "กรุณากรอกข้อมูลให้ครบถ้วน" };
+      }
+
+      // Check if email exists
+      const user = await prisma.user.findUnique({
+        where: { email }
+      });
+
+      if (!user) {
+        set.status = 404;
+        return { error: "ไม่พบอีเมลในระบบ" };
+      }
+
+      // Hash new password
+      const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS || "12");
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update password
+      await prisma.user.update({
+        where: { email },
+        data: { password: hashedPassword }
+      });
+
+      return {
+        message: "เปลี่ยนรหัสผ่านสำเร็จ"
+      };
+    } catch (error) {
+      console.error("Reset password error:", error);
+      set.status = 500;
+      return { error: "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน" };
+    }
   });

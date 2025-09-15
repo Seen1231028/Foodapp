@@ -56,10 +56,9 @@ export default function RegisterPage() {
       roleId: parseInt(roleId),
     });
     if (success) {
-      // เพิ่ม delay เล็กน้อยเพื่อให้ AuthContext อัพเดท user state
       setTimeout(() => {
         router.push("/");
-      }, 100);
+      }, 1000);
     } else {
       reset();
     }

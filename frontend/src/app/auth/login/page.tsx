@@ -36,7 +36,11 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginForm) => {
     const success = await login(data);
     if (success) {
-      router.push("/");
+      console.log('Login successful, redirecting...');
+      // เพิ่ม delay เล็กน้อยแล้ว force refresh
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
     }
   };
 
@@ -69,7 +73,15 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">รหัสผ่าน</Label>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="password">รหัสผ่าน</Label>
+                  <Link 
+                    href="/auth/forgot-password" 
+                    className="text-xs text-orange-600 hover:text-orange-800 hover:underline font-medium"
+                  ><Label>ลืมรหัสผ่าน?</Label>
+
+                  </Link>
+                </div>
                 <div className="relative">
                   <Input
                     id="password"
