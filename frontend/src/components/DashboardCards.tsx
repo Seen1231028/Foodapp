@@ -38,6 +38,12 @@ const cardConfigs: Record<string, DashboardCard[]> = {
   ],
   shop_owner: [
     {
+      title: "Dashboard",
+      description: "ภาพรวมร้านค้าและสถิติการขาย",
+      href: "/shop/dashboard",
+      buttonText: "ดู Dashboard"
+    },
+    {
       title: "จัดการเมนู",
       description: "เพิ่ม แก้ไข หรือลบเมนูอาหาร",
       href: "/shop/menu",
@@ -54,6 +60,12 @@ const cardConfigs: Record<string, DashboardCard[]> = {
       description: "ดูสถิติและรายงานยอดขาย",
       href: "/shop/reports",
       buttonText: "ดูรายงาน"
+    },
+    {
+      title: "ข้อมูลร้าน",
+      description: "จัดการข้อมูลร้านและการตั้งค่า",
+      href: "/shop/profile",
+      buttonText: "จัดการข้อมูล"
     }
   ],
   customer: [
@@ -104,7 +116,7 @@ export function DashboardCards({ userRole }: DashboardCardsProps) {
   if (cards.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-500">ไม่พบข้อมูลสำหรับบทบาทนี้</p>
+        <p className="text-muted-foreground">ไม่พบข้อมูลสำหรับบทบาทนี้</p>
       </div>
     );
   }
@@ -113,8 +125,8 @@ export function DashboardCards({ userRole }: DashboardCardsProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {cards.map((card, index) => (
         <Card key={index} className="p-6">
-          <h3 className="text-xl font-semibold mb-4">{card.title}</h3>
-          <p className="text-gray-600 mb-4">{card.description}</p>
+          <h3 className="text-xl font-semibold mb-4 text-card-foreground">{card.title}</h3>
+          <p className="text-muted-foreground mb-4">{card.description}</p>
           <Link href={card.href}>
             <Button>{card.buttonText}</Button>
           </Link>

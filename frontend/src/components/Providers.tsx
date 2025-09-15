@@ -4,6 +4,7 @@ import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { ThemeProvider } from '@/contexts/ThemeContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,12 +23,13 @@ interface ProvidersProps {
 
 export function Providers({ children, toasterPosition = 'top-right' }: ProvidersProps) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        {children}
-        <Toaster
-          position={toasterPosition}
-          toastOptions={{
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          {children}
+          <Toaster
+            position={toasterPosition}
+            toastOptions={{
             duration: 4000,
             style: {
               background: '#363636',
@@ -47,5 +49,6 @@ export function Providers({ children, toasterPosition = 'top-right' }: Providers
         />
       </AuthProvider>
     </QueryClientProvider>
+    </ThemeProvider>
   )
 }
