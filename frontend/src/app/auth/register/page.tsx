@@ -44,6 +44,7 @@ export default function RegisterPage() {
     handleSubmit,
     setValue,
     formState: { errors },
+    reset,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
   });
@@ -56,6 +57,8 @@ export default function RegisterPage() {
     });
     if (success) {
       router.push("/");
+    } else {
+      reset();
     }
   };
 

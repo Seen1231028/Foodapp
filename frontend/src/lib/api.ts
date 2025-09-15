@@ -38,10 +38,6 @@ class ApiService {
       (error) => {
         if (error.response?.status === 401) {
           this.clearToken()
-          // Redirect to login if needed
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login'
-          }
         }
         return Promise.reject(error)
       }
@@ -86,21 +82,29 @@ class ApiService {
     }
   }
 
-  // Auth endpoints
   async login(data: LoginRequest): Promise<AuthResponse> {
-    const response: AxiosResponse<AuthResponse> = await this.api.post('/api/auth/login', data)
-    const { token, user } = response.data
-    this.setToken(token)
-    this.setUser(user)
-    return response.data
+    try {
+      const response: AxiosResponse<AuthResponse> = await this.api.post('/api/auth/login', data)
+      const { token, user } = response.data
+      this.setToken(token)
+      this.setUser(user)
+      return response.data
+    } catch (error) {
+      throw error
+    }
   }
 
   async register(data: RegisterRequest): Promise<AuthResponse> {
-    const response: AxiosResponse<AuthResponse> = await this.api.post('/api/auth/register', data)
-    const { token, user } = response.data
-    this.setToken(token)
-    this.setUser(user)
-    return response.data
+    try {
+      const response: AxiosResponse<AuthResponse> = await this.api.post('/api/auth/register', data)
+      const { token, user } = response.data
+      this.setToken(token)
+      this.setUser(user)
+      return response.data
+    } catch (error) {
+      // Re-throw the error to be handled by the calling component
+      throw error
+    }
   }
 
   async verifyToken(): Promise<{ user: User }> {
