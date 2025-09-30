@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,33 +24,44 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-interface MenuItem {
+// Menu item shape adapted for homepage from DB menus
+interface MenuItemDisplay {
   id: number;
-  restaurantId: number;
+  restaurantId: number | null; // maps from shopId
   name: string;
-  description: string;
+  description: string | null;
   price: number;
-  image: string;
-  category: string;
+  image?: string | null;
+  category: string; // category name
   isAvailable: boolean;
-  rating: number;
-  reviewCount: number;
-  preparationTime: string;
+  preparationTime: string; // display friendly string
+  // Optional placeholders (could be replaced by real ratings later)
+  rating?: number;
+  reviewCount?: number;
 }
 
 interface Restaurant {
   id: number;
   name: string;
   description: string;
-  image: string;
-  rating: number;
-  reviewCount: number;
-  deliveryTime: string;
-  deliveryFee: number;
-  minimumOrder: number;
-  category: string;
-  distance: string;
-  isOpen: boolean;
+  image: string | null;
+  rating?: number;
+  reviewCount?: number;
+  deliveryTime?: string;
+  deliveryFee?: number;
+  minimumOrder?: number;
+  category?: string;
+  distance?: string;
+  isOpen?: boolean;
+  menuCount?: number;
+  owner?: { id: number; name: string; avatar?: string | null } | null;
+}
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+function imageUrl(rel?: string|null) {
+  if (!rel) return null;
+  const origin = API_BASE.endsWith('/api') ? API_BASE.slice(0,-4) : API_BASE;
+  return rel.startsWith('/uploads') ? origin + rel : rel;
 }
 
 function HomePage({ userRole }: { userRole: string }) {
@@ -59,145 +70,83 @@ function HomePage({ userRole }: { userRole: string }) {
   const [cartItems, setCartItems] = useState<{ [key: number]: number }>({});
   const [selectedRestaurant, setSelectedRestaurant] = useState<number | null>(null);
   const [showCart, setShowCart] = useState(false);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [loadingShops, setLoadingShops] = useState(true);
+  const [menuItems, setMenuItems] = useState<MenuItemDisplay[]>([]);
+  const [loadingMenus, setLoadingMenus] = useState(true);
 
-  const menuItems: MenuItem[] = [
-    {
-      id: 1,
-      restaurantId: 1,
-      name: "ผัดไทยกุ้งสด",
-      description: "ผัดไทยแสนอร่อย โรยหน้าด้วยกุ้งสดๆ พร้อมผักกาดขาว ถั่วงอก และใส่ไข่",
-      price: 120,
-      image: "/api/placeholder/300/200",
-      category: "thai",
-      isAvailable: true,
-      rating: 4.8,
-      reviewCount: 245,
-      preparationTime: "15-20 นาที"
-    },
-    {
-      id: 2,
-      restaurantId: 1,
-      name: "ต้มยำกุ้งน้ำข้น",
-      description: "ต้มยำรสเด็ด เปรียวเค็มหวาน กุ้งสดใหญ่ เห็ดฟาง มะเขือเทศ",
-      price: 150,
-      image: "/api/placeholder/300/200",
-      category: "thai",
-      isAvailable: true,
-      rating: 4.9,
-      reviewCount: 312,
-      preparationTime: "20-25 นาที"
-    },
-    {
-      id: 3,
-      restaurantId: 2,
-      name: "ซูชิแซลมอนพรีเมียม",
-      description: "ซูชิแซลมอนสดใหม่ นำเข้าจากนอร์เวย์ พร้อมข้าวซูชิเกรดพรีเมียม",
-      price: 280,
-      image: "/api/placeholder/300/200",
-      category: "japanese",
-      isAvailable: true,
-      rating: 4.7,
-      reviewCount: 189,
-      preparationTime: "10-15 นาที"
-    },
-    {
-      id: 4,
-      restaurantId: 2,
-      name: "ราเมนหมูชาชู",
-      description: "ราเมนน้ำซุปเข้มข้น หมูชาชูนุ่ม ไข่ต้ม และผักโขมญี่ปุ่น",
-      price: 220,
-      image: "/api/placeholder/300/200",
-      category: "japanese",
-      isAvailable: true,
-      rating: 4.6,
-      reviewCount: 156,
-      preparationTime: "25-30 นาที"
-    },
-    {
-      id: 5,
-      restaurantId: 3,
-      name: "เบอร์เกอร์เนื้อวัวแองกัส",
-      description: "เบอร์เกอร์เนื้อวัวแองกัสแท้ 100% พร้อมชีสเชดดาร์ และผักสดๆ",
-      price: 189,
-      image: "/api/placeholder/300/200",
-      category: "western",
-      isAvailable: true,
-      rating: 4.5,
-      reviewCount: 98,
-      preparationTime: "15-20 นาที"
-    },
-    {
-      id: 6,
-      restaurantId: 3,
-      name: "สเต็กเนื้อริบอาย",
-      description: "สเต็กเนื้อริบอายเกรดพรีเมียม ย่างสุกกำลังดี พร้อมผักและมันฝรั่ง",
-      price: 450,
-      image: "/api/placeholder/300/200",
-      category: "western",
-      isAvailable: true,
-      rating: 4.8,
-      reviewCount: 67,
-      preparationTime: "30-35 นาที"
-    }
-  ];
+  // Fetch menus from backend (DB) so prices are consistent with /shop/menu
+  useEffect(() => {
+    const fetchMenus = async () => {
+      try {
+        setLoadingMenus(true);
+        const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+        const res = await fetch(`${base}/menus`);
+        if (!res.ok) throw new Error('Failed to load menus');
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const mapped: MenuItemDisplay[] = json.data.map((m: any) => ({
+            id: m.id,
+            restaurantId: m.shopId ?? null,
+            name: m.name,
+            description: m.description || null,
+            price: m.price,
+            image: m.image || '/api/placeholder/300/200',
+            category: m.category?.name || 'อื่นๆ',
+            isAvailable: m.isAvailable,
+            preparationTime: m.preparationTime ? `${m.preparationTime} นาที` : '15 นาที',
+            rating: 4.6, // placeholder until rating system implemented
+            reviewCount: 0
+          }));
+          setMenuItems(mapped);
+        }
+      } catch (e) {
+        console.error('Fetch menus error:', e);
+      } finally {
+        setLoadingMenus(false);
+      }
+    };
+    fetchMenus();
+  }, []);
 
-  const restaurants: Restaurant[] = [
-    {
-      id: 1,
-      name: "Golden Thai Kitchen",
-      description: "ร้านอาหารไทยต้นตำรับ รสชาติหลากหลาย",
-      image: "/api/placeholder/400/250",
-      rating: 4.8,
-      reviewCount: 1245,
-      deliveryTime: "25-35 นาที",
-      deliveryFee: 25,
-      minimumOrder: 100,
-      category: "thai",
-      distance: "1.2 กม.",
-      isOpen: true
-    },
-    {
-      id: 2,
-      name: "Sakura Sushi Bar", 
-      description: "ซูชิและซาชิมิสดใหม่ สไตล์ญี่ปุ่นแท้",
-      image: "/api/placeholder/400/250",
-      rating: 4.7,
-      reviewCount: 987,
-      deliveryTime: "20-30 นาที", 
-      deliveryFee: 30,
-      minimumOrder: 150,
-      category: "japanese",
-      distance: "0.8 กม.",
-      isOpen: true
-    },
-    {
-      id: 3,
-      name: "Western Grill House",
-      description: "สเต็กและอาหารตะวันตก คุณภาพพรีเมียม",
-      image: "/api/placeholder/400/250",
-      rating: 4.6,
-      reviewCount: 756,
-      deliveryTime: "30-40 นาที",
-      deliveryFee: 35,
-      minimumOrder: 200,
-      category: "western", 
-      distance: "2.1 กม.",
-      isOpen: true
-    }
-  ];
+  useEffect(() => {
+    // Fetch recommended shops from backend
+    const fetchShops = async () => {
+      try {
+        setLoadingShops(true);
+        const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const res = await fetch(`${base}/shops/recommended?limit=6`, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : ''
+          }
+        });
+        if (!res.ok) throw new Error('Failed to load shops');
+        const json = await res.json();
+        if (json.success) {
+          setRestaurants(json.data);
+        }
+      } catch (e) {
+        console.error('Fetch recommended shops error:', e);
+      } finally {
+        setLoadingShops(false);
+      }
+    };
+    fetchShops();
+  }, []);
 
-  const categories = [
-    { id: 'all', name: 'ทั้งหมด' },
-    { id: 'thai', name: 'อาหารไทย' },
-    { id: 'japanese', name: 'อาหารญี่ปุ่น' },
-    { id: 'western', name: 'อาหารตะวันตก' },
-    { id: 'chinese', name: 'อาหารจีน' }
-  ];
+  // Build categories dynamically from menu items
+  const categories = useMemo(() => {
+    const setCat = new Set<string>();
+    menuItems.forEach(m => setCat.add(m.category));
+    return [{ id: 'all', name: 'ทั้งหมด' }, ...Array.from(setCat).map(c => ({ id: c, name: c }))];
+  }, [menuItems]);
 
   const filteredMenuItems = menuItems.filter(item => {
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const lowerSearch = searchTerm.toLowerCase();
+    const matchesSearch = item.name.toLowerCase().includes(lowerSearch) ||
+      (item.description?.toLowerCase().includes(lowerSearch));
     const matchesRestaurant = selectedRestaurant === null || item.restaurantId === selectedRestaurant;
     return matchesCategory && matchesSearch && matchesRestaurant;
   });
@@ -288,6 +237,7 @@ function HomePage({ userRole }: { userRole: string }) {
             {!selectedRestaurant && (
               <div className="mb-8">
                 <h2 className="text-xl font-semibold mb-4">ร้านแนะนำ</h2>
+                {loadingShops && <p className="text-sm text-muted-foreground mb-2">กำลังโหลดร้านค้า...</p>}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {restaurants.map((restaurant) => (
                     <Card 
@@ -296,32 +246,40 @@ function HomePage({ userRole }: { userRole: string }) {
                       onClick={() => handleRestaurantClick(restaurant.id)}
                     >
                       <div className="aspect-video bg-muted">
-                        <div className="w-full h-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center">
-                          <Store className="w-12 h-12 text-white" />
-                        </div>
+                        {restaurant.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={imageUrl(restaurant.image) || ''} alt={restaurant.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center">
+                            <Store className="w-12 h-12 text-white" />
+                          </div>) }
                       </div>
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start mb-2">
                           <h3 className="font-semibold">{restaurant.name}</h3>
                           <div className="flex items-center text-sm text-yellow-600">
                             <Star className="w-4 h-4 fill-current mr-1" />
-                            {restaurant.rating}
+                            {restaurant.menuCount || 0}
                           </div>
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2">{restaurant.description}</p>
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{restaurant.description}</p>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <div className="flex items-center">
-                            <Clock className="w-4 h-4 mr-1" />
-                            {restaurant.deliveryTime}
+                            <Clock className="w-4 h-4 mr-1" />เมนู {restaurant.menuCount || 0}
                           </div>
-                          <div className="flex items-center">
-                            <MapPin className="w-4 h-4 mr-1" />
-                            {restaurant.distance}
-                          </div>
+                          {restaurant.owner?.name && (
+                            <div className="flex items-center gap-1">
+                              <User className="w-4 h-4" />
+                              <span className="truncate max-w-[90px]">{restaurant.owner.name}</span>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
                   ))}
+                  {!loadingShops && restaurants.length === 0 && (
+                    <div className="text-sm text-muted-foreground">ยังไม่มีร้านในระบบ</div>
+                  )}
                 </div>
               </div>
             )}
@@ -530,8 +488,13 @@ export default function Home() {
           {/* Content with overlay */}
           <div className="max-w-md w-full space-y-8 p-8 relative z-10">
             <div className="text-center">
-              <h1 className="text-4xl font-bold text-foreground mb-2 drop-shadow-lg">ZeenZilla</h1>
-              <p className="text-muted-foreground mb-8 drop-shadow">ระบบสั่งอาหารออนไลน์</p>
+              <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3 bg-clip-text text-transparent bg-gradient-to-br from-black via-black to-black/80 drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]">
+                ZeenZilla
+              </h1>
+              <p className="relative inline-block text-base md:text-lg font-medium text-black/90 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm shadow-sm border border-white/15">
+                <span className="relative z-10">ระบบสั่งอาหารออนไลน์</span>
+                <span className="absolute inset-0 rounded-full bg-gradient-to-r from-white/20 via-white/10 to-transparent opacity-70" />
+              </p>
             </div>
             
             <Card className="p-8">

@@ -153,6 +153,25 @@ async function main() {
 
   console.log('✅ Demo users created')
 
+  // Create demo shops (if not exist) and later link menus
+  console.log('🏪 Creating demo shops')
+  const shopOwnerUser = await prisma.user.findFirst({ where: { username: 'shopowner' } });
+  if (shopOwnerUser) {
+    const demoShops = [
+      { name: 'Golden Thai Kitchen', description: 'อาหารไทยต้นตำรับ', image: null as string | null },
+      { name: 'Sakura Sushi Bar', description: 'ซูชิและอาหารญี่ปุ่น', image: null },
+      { name: 'Western Grill House', description: 'สเต็กและอาหารตะวันตก', image: null }
+    ];
+    for (const s of demoShops) {
+      // @ts-ignore
+      const existing = await (prisma as any).shop.findFirst({ where: { name: s.name } });
+      if (!existing) {
+        // @ts-ignore
+        await (prisma as any).shop.create({ data: { name: s.name, description: s.description, image: s.image, ownerId: shopOwnerUser.id } });
+      }
+    }
+  }
+
   // Create sample menu items
   const existingCategories = await prisma.category.findMany();
   const mainCourse = existingCategories.find(c => c.name === 'อาหารจานหลัก');
@@ -189,6 +208,23 @@ async function main() {
         }
       ]
     });
+  }
+
+  // Link some menus to shops (simple distribution)
+  try {
+    // @ts-ignore
+    const shops = await (prisma as any).shop.findMany();
+    if (shops.length) {
+      const menusAll = await prisma.menu.findMany();
+      for (let i = 0; i < menusAll.length; i++) {
+        const menu = menusAll[i];
+        const shop = shops[i % shops.length];
+        await prisma.menu.update({ where: { id: menu.id }, data: { shopId: shop.id } });
+      }
+      console.log('🔗 Linked menus to shops');
+    }
+  } catch (e) {
+    console.warn('Link menus to shops skipped (shop model may not be migrated yet):', e);
   }
 
   if (drinks) {
@@ -262,6 +298,68 @@ async function main() {
           paidAt: i <= 3 ? new Date() : null
         }
       });
+    }
+  }
+
+  // --- Historical synthetic data (last 6 months) ---
+  if (customerUser && menus.length > 0) {
+    console.log('➕ Generating historical orders (6 months)');
+    const monthsBack = 6; // adjustable
+    for (let m = 1; m <= monthsBack; m++) {
+      const baseMonth = new Date();
+      baseMonth.setMonth(baseMonth.getMonth() - m);
+      // number of orders per month (vary)
+      const ordersThisMonth = 6 + Math.floor(Math.random() * 5); // 6-10 orders
+      for (let i = 0; i < ordersThisMonth; i++) {
+        const day = 2 + (i % 20);
+        const createdAt = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), day, 10 + (i % 6));
+        const statusPool = ['COMPLETED','COMPLETED','PENDING','READY','CANCELLED'];
+        const status = statusPool[i % statusPool.length] as any;
+        const totalAmountBase = 100 + (i * 15) + Math.floor(Math.random() * 40);
+        const order = await prisma.order.create({
+          data: {
+            orderNumber: `HIST-${m}-${i}-${Date.now()}`,
+            userId: customerUser.id,
+            status,
+            totalAmount: totalAmountBase,
+            notes: `Historical order m${m} #${i}`,
+            createdAt,
+            updatedAt: createdAt
+          }
+        });
+
+        // Items: pick 1-3 menus
+        const itemCount = 1 + Math.min(2, Math.floor(Math.random() * 3));
+        for (let k = 0; k < itemCount; k++) {
+          const menu = menus[(i + k) % menus.length];
+            await prisma.orderItem.create({
+              data: {
+                orderId: order.id,
+                menuId: menu.id,
+                quantity: 1 + (k % 3),
+                price: menu.price
+              }
+            });
+        }
+
+        // Payment (only if not cancelled)
+        if (status !== 'CANCELLED') {
+          const methodPool = ['CASH','BANK_TRANSFER','WALLET'];
+          const method = methodPool[(i + m) % methodPool.length] as any;
+          const paid = status === 'COMPLETED' || status === 'READY';
+          await prisma.payment.create({
+            data: {
+              orderId: order.id,
+              amount: order.totalAmount,
+              method,
+              status: paid ? 'PAID' : 'PENDING',
+              paidAt: paid ? createdAt : null,
+              createdAt,
+              updatedAt: createdAt
+            }
+          });
+        }
+      }
     }
   }
 

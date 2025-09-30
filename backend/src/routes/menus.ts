@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { PrismaClient } from "@prisma/client";
+import { saveBase64Image, deleteImage } from '../utils/image';
 import { jwt } from '@elysiajs/jwt'
 import { cors } from '@elysiajs/cors'
 
@@ -259,6 +260,26 @@ export const menuRoutes = new Elysia({ prefix: "/menus" })
       console.error("Update menu error:", error);
       set.status = 500;
       return { error: "เกิดข้อผิดพลาดในการอัพเดตเมนู" };
+    }
+  })
+  // Upload/replace menu image (base64) POST /menus/:id/image { image: 'data:image/...'}
+  .post('/:id/image', async ({ params, body, user, set }: any) => {
+    try {
+      const id = parseInt(params.id as string);
+      if (isNaN(id)) { set.status = 400; return { success: false, error: 'รหัสเมนูไม่ถูกต้อง' }; }
+      if (!user) { set.status = 401; return { success: false, error: 'ไม่ได้รับอนุญาต' }; }
+      if (!['shop_owner','admin'].includes(user.role.name)) { set.status = 403; return { success: false, error: 'ไม่มีสิทธิ์อัปโหลดรูปเมนู' }; }
+      const { image } = body as { image?: string };
+      if (!image) { set.status = 400; return { success: false, error: 'กรุณาส่งรูป (base64 data URL)' }; }
+      const menu = await prisma.menu.findFirst({ where: { id, isActive: true } });
+      if (!menu) { set.status = 404; return { success: false, error: 'ไม่พบเมนู' }; }
+      const result = saveBase64Image(image, 'menus');
+      if (menu.image && menu.image !== result.relativePath) deleteImage(menu.image);
+      const updated = await prisma.menu.update({ where: { id }, data: { image: result.relativePath } });
+      return { success: true, data: { id: updated.id, image: updated.image } };
+    } catch (e) {
+      console.error('Upload menu image error:', e);
+      set.status = 500; return { success: false, error: 'อัปโหลดรูปเมนูไม่สำเร็จ' };
     }
   })
   

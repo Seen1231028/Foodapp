@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, OrderStatus, PaymentStatus } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
@@ -7,123 +7,186 @@ const prisma = new PrismaClient();
 const reportsRoutes = new Elysia({ prefix: '/reports' })
   .get('/dashboard', async ({ headers, set }) => {
     try {
-      // ตรวจสอบ authentication
       const token = headers.authorization?.replace('Bearer ', '');
       if (!token) {
         set.status = 401;
         return { success: false, error: 'ไม่พบ token การยืนยันตัวตน' };
       }
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-      if (!decoded || decoded.role !== 'admin') {
+      let decoded: any;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
+      } catch (e) {
+        set.status = 401;
+        return { success: false, error: 'Token ไม่ถูกต้องหรือหมดอายุ' };
+      }
+
+      const allowedRoles = ['admin', 'shop_owner'];
+      if (!decoded || !allowedRoles.includes(decoded.role)) {
+        console.warn('Unauthorized reports access attempt by role:', decoded?.role);
         set.status = 403;
         return { success: false, error: 'ไม่มีสิทธิ์เข้าถึงข้อมูลรายงาน' };
       }
 
-      // ดึงข้อมูลจริงจากฐานข้อมูล
-      const totalUsers = await prisma.user.count();
-      const totalOrders = await prisma.order.count();
-      const totalMenus = await prisma.menu.count();
-      
-      // นับผู้ใช้ตาม role
-      const usersByRole = await prisma.user.groupBy({
-        by: ['roleId'],
-        _count: {
-          id: true
+      // ---------------- Real DB Aggregations ----------------
+      // Basic counts
+      const [ totalUsers, totalMenus, orders, paidPayments, users, orderItems, payments ] = await Promise.all([
+        prisma.user.count(),
+        prisma.menu.count(),
+        prisma.order.findMany({ select: { id: true, status: true, totalAmount: true, createdAt: true } }),
+        prisma.payment.findMany({ where: { status: PaymentStatus.PAID }, select: { amount: true, method: true } }),
+        prisma.user.findMany({ select: { id: true, createdAt: true, roleId: true } }),
+        prisma.orderItem.findMany({ include: { menu: { select: { name: true } } } }),
+        prisma.payment.findMany({ select: { method: true, status: true } })
+      ]);
+
+      // Orders grouping by status and sales basics
+      const ordersByStatusMap: Record<string, number> = {};
+      for (const o of orders) {
+        ordersByStatusMap[o.status] = (ordersByStatusMap[o.status] || 0) + 1;
+      }
+      const ordersByStatus = Object.entries(ordersByStatusMap).map(([status, count]) => ({ status, count }));
+      const totalOrders = orders.length;
+      const completedOrders = orders.filter(o => o.status === OrderStatus.COMPLETED);
+      const totalSales = completedOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+      const averageOrderValue = completedOrders.length ? Math.round(totalSales / completedOrders.length) : 0;
+
+      // Top selling items (sum quantity & revenue per menu)
+      interface TopAgg { name: string; quantity: number; revenue: number; }
+      const topAggMap: Record<number, TopAgg> = {};
+      for (const item of orderItems) {
+        const revenue = Number(item.price) * item.quantity;
+        const key = item.menuId;
+        if (!topAggMap[key]) {
+          topAggMap[key] = { name: item.menu.name, quantity: 0, revenue: 0 };
         }
+        topAggMap[key].quantity += item.quantity;
+        topAggMap[key].revenue += revenue;
+      }
+      const topSellingItems = Object.values(topAggMap)
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 5)
+        .map(it => ({ name: it.name, quantity: it.quantity, revenue: Math.round(it.revenue) }));
+
+      // User counts by role (derive via roleId -> role name fetch minimal)
+      const roles = await prisma.role.findMany({ select: { id: true, name: true } });
+      const roleNameById = Object.fromEntries(roles.map(r => [r.id, r.name]));
+      const usersByRoleMap: Record<string, number> = {};
+      for (const u of users) {
+        const rName = roleNameById[u.roleId] || 'unknown';
+        usersByRoleMap[rName] = (usersByRoleMap[rName] || 0) + 1;
+      }
+      const usersByRoleArr = Object.entries(usersByRoleMap).map(([role, count]) => ({ role, count }));
+
+      // New users this month
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const newUsersThisMonth = users.filter(u => u.createdAt >= monthStart).length;
+
+      // Active users heuristic: users who placed at least one order
+      const userOrderSet = new Set(orders.map(o => o.id)); // actually order ids; need userId but we didn't select userId earlier
+      // Re-fetch minimal orders with userId to compute active users
+      const ordersWithUser = await prisma.order.findMany({ select: { userId: true } });
+      const activeUserSet = new Set(ordersWithUser.map(o => o.userId));
+      const activeUsers = activeUserSet.size;
+
+      // Monthly charts (last 12 months)
+      function monthKey(d: Date) { return d.getFullYear() + '-' + (d.getMonth()+1).toString().padStart(2,'0'); }
+      const last12: string[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        last12.push(monthKey(d));
+      }
+
+      const orderMonthAgg: Record<string, { sales: number; revenue: number; orders: number }> = {};
+      for (const key of last12) orderMonthAgg[key] = { sales: 0, revenue: 0, orders: 0 };
+      for (const o of orders) {
+        const key = monthKey(o.createdAt);
+        if (orderMonthAgg[key]) {
+          orderMonthAgg[key].orders += 1;
+          orderMonthAgg[key].revenue += Number(o.totalAmount);
+          orderMonthAgg[key].sales += Number(o.totalAmount); // alias
+        }
+      }
+
+      const locale = 'th-TH';
+      const revenueData = last12.map(key => {
+        const [y, m] = key.split('-').map(Number);
+        const label = new Date(y, m - 1).toLocaleDateString(locale, { month: 'short' });
+        return { month: label, revenue: Math.round(orderMonthAgg[key].revenue) };
+      });
+      const salesDataSeries = last12.map(key => {
+        const [y, m] = key.split('-').map(Number);
+        const label = new Date(y, m - 1).toLocaleDateString(locale, { month: 'short' });
+        return { month: label, sales: Math.round(orderMonthAgg[key].sales) };
       });
 
-      // นับ orders ตาม status
-      const ordersByStatus = await prisma.order.groupBy({
-        by: ['status'],
-        _count: {
-          id: true
-        }
+      // User growth (last 6 months user counts cumulative)
+      const last6Keys = last12.slice(-6);
+      const userMonthCounts: Record<string, number> = {};
+      for (const key of last6Keys) userMonthCounts[key] = 0;
+      for (const u of users) {
+        const key = monthKey(u.createdAt);
+        if (userMonthCounts[key] !== undefined) userMonthCounts[key] += 1;
+      }
+      // cumulative style
+      let running = 0;
+      const userGrowthData = last6Keys.map(key => {
+        running += userMonthCounts[key];
+        const [y, m] = key.split('-').map(Number);
+        const label = new Date(y, m - 1).toLocaleDateString(locale, { month: 'short' });
+        return { month: label, users: running };
       });
 
-      // ค่าเฉลี่ยของยอดสั่งซื้อ
-      const orderTotalAvg = await prisma.order.aggregate({
-        _avg: {
-          totalAmount: true
-        }
-      });
+      // Payment method distribution (paid only)
+      const paymentMethodMap: Record<string, { count: number }> = {};
+      for (const p of payments) {
+        if (p.status !== PaymentStatus.PAID) continue;
+        paymentMethodMap[p.method] = { count: (paymentMethodMap[p.method]?.count || 0) + 1 };
+      }
+      const paymentMethods = Object.entries(paymentMethodMap).map(([method, v]) => ({ method, count: v.count, percentage: 0 }));
+      const totalPaidMethod = paymentMethods.reduce((s, m) => s + m.count, 0) || 1;
+      for (const pm of paymentMethods) pm.percentage = +( (pm.count / totalPaidMethod) * 100 ).toFixed(1);
 
-      // ข้อมูลรายงาน
+      // Assemble reportData
       const reportData = {
         salesReport: {
-          totalSales: totalOrders * 185, // รายได้เฉลี่ยต่อออเดอร์
+          totalSales: Math.round(totalSales),
           totalOrders,
-          averageOrderValue: Math.round(Number(orderTotalAvg._avg.totalAmount) || 185),
-          topSellingItems: [
-            { name: 'ข้าวผัดกุ้ง', quantity: Math.floor(totalOrders * 0.15), revenue: Math.floor(totalOrders * 0.15 * 80) },
-            { name: 'ก๋วยเตี๋ยวต้มยำ', quantity: Math.floor(totalOrders * 0.12), revenue: Math.floor(totalOrders * 0.12 * 65) },
-            { name: 'ผัดไทยกุ้งสด', quantity: Math.floor(totalOrders * 0.10), revenue: Math.floor(totalOrders * 0.10 * 85) },
-            { name: 'ชาไทยเย็น', quantity: Math.floor(totalOrders * 0.20), revenue: Math.floor(totalOrders * 0.20 * 25) },
-            { name: 'กาแฟดำร้อน', quantity: Math.floor(totalOrders * 0.18), revenue: Math.floor(totalOrders * 0.18 * 30) }
-          ]
+          averageOrderValue,
+          topSellingItems
         },
         userReport: {
           totalUsers,
-          newUsersThisMonth: Math.floor(totalUsers * 0.08), // 8% ผู้ใช้ใหม่
-          activeUsers: Math.floor(totalUsers * 0.75), // 75% ผู้ใช้งานอยู่
-          usersByRole: [
-            { role: 'customer', count: Math.floor(totalUsers * 0.90) },
-            { role: 'shop_owner', count: Math.floor(totalUsers * 0.06) },
-            { role: 'admin', count: Math.floor(totalUsers * 0.02) },
-            { role: 'finance', count: Math.floor(totalUsers * 0.02) }
-          ]
+          newUsersThisMonth,
+          activeUsers,
+          usersByRole: usersByRoleArr
         },
         performanceReport: {
-          ordersByStatus: ordersByStatus.map(item => ({
-            status: item.status,
-            count: item._count.id
-          })),
-          paymentMethods: [
-            { method: 'CASH', count: Math.floor(totalOrders * 0.36), percentage: 36 },
-            { method: 'BANK_TRANSFER', count: Math.floor(totalOrders * 0.304), percentage: 30.4 },
-            { method: 'CREDIT_CARD', count: Math.floor(totalOrders * 0.232), percentage: 23.2 },
-            { method: 'WALLET', count: Math.floor(totalOrders * 0.104), percentage: 10.4 }
-          ]
+          ordersByStatus,
+          paymentMethods
         },
         chartData: {
-          userGrowthData: Array.from({ length: 6 }, (_, index) => {
-            const month = new Date(2024, index).toLocaleDateString('th-TH', { month: 'short' });
-            const users = Math.floor(totalUsers * (0.6 + (index * 0.08)) + Math.random() * 100);
-            return { month, users };
-          }),
-          salesData: Array.from({ length: 12 }, (_, index) => {
-            const month = new Date(2024, index).toLocaleDateString('th-TH', { month: 'short' });
-            const sales = Math.floor(totalOrders * (0.7 + Math.random() * 0.6) * 150);
-            return { month, sales };
-          }),
-          revenueData: Array.from({ length: 12 }, (_, index) => {
-            const month = new Date(2024, index).toLocaleDateString('th-TH', { month: 'short' });
-            const revenue = Math.floor(totalOrders * (0.7 + Math.random() * 0.6) * 185);
-            return { month, revenue };
-          })
+          userGrowthData,
+          salesData: salesDataSeries,
+          revenueData
         },
         stats: {
           totalUsers,
           totalMenus,
           totalOrders,
-          completedOrders: ordersByStatus.find(item => item.status === 'COMPLETED')?._count.id || 0,
-          pendingOrders: ordersByStatus.find(item => item.status === 'PENDING')?._count.id || 0
+          completedOrders: completedOrders.length,
+          pendingOrders: ordersByStatusMap[OrderStatus.PENDING] || 0
         }
       };
 
       set.status = 200;
-      return {
-        success: true,
-        data: reportData
-      };
+      return { success: true, data: reportData };
 
     } catch (error) {
       console.error('Reports dashboard error:', error);
       set.status = 500;
-      return {
-        success: false,
-        error: 'เกิดข้อผิดพลาดในการดึงข้อมูลรายงาน'
-      };
+      return { success: false, error: 'เกิดข้อผิดพลาดในการดึงข้อมูลรายงาน' };
     }
   });
 

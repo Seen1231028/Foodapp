@@ -12,7 +12,7 @@
     "db:seed": "bunx prisma db seed"
   },
   "prisma": {
-    "seed": "bun run prisma/seed.ts"
+    "seed": "bunx tsx prisma/seed.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",

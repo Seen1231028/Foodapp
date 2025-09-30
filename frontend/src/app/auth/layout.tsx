@@ -20,7 +20,7 @@ export default function AuthLayout({
           height: '100vh', 
           zIndex: 0, 
           pointerEvents: 'none',
-          backgroundColor: '#1a1a2e' // เพิ่ม background color ชั่วคราวเพื่อให้เห็น
+          backgroundColor: '#FFFF' // เพิ่ม background color ชั่วคราวเพื่อให้เห็น
         }}>
           <LiquidEther
             colors={[ '#5227FF', '#FF9FFC', '#B19EEF' ]}

@@ -191,112 +191,123 @@ export const getTopMenuItems = async () => {
 // ดึงข้อมูลรายงานแบบรวม
 export const getShopReports = async (): Promise<ShopReportData> => {
   try {
-    // ดึงข้อมูลพร้อมกันหลาย API
-    const [
-      dashboardResponse,
-      monthlyRevenueResponse,
-      dailySalesResponse,
-      monthlyOrdersResponse,
-      topMenuResponse
-    ] = await Promise.all([
-      getDashboardStats(),
-      getMonthlyRevenue(),
-      getDailySales(),
-      getMonthlyOrders(),
-      getTopMenuItems()
-    ]);
+    const token = authUtils.getToken();
+    if (!token) {
+      throw new Error('ไม่พบ token');
+    }
 
-    // ประมวลผลข้อมูลที่ได้
-    const monthlyRevenue = monthlyRevenueResponse.success ? monthlyRevenueResponse.data : [];
-    const dailySales = dailySalesResponse.success ? dailySalesResponse.data : [];
-    const monthlyOrders = monthlyOrdersResponse.success ? monthlyOrdersResponse.data : [];
-    const topMenuItems = topMenuResponse.success ? topMenuResponse.data : [];
-    const dashboardStats = dashboardResponse.success ? dashboardResponse.data : null;
+    const url = `${API_BASE_URL}/reports/dashboard`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-    // แปลงข้อมูลให้เป็นรูปแบบที่ต้องการ
-    const salesData = monthlyRevenue.map((item: any) => ({
-      month: item.month,
-      revenue: item.revenue || 0,
-      orders: item.orders || 0,
-      customers: Math.floor(item.orders * 0.7) || 0 // สมมติลูกค้าใหม่ 70% ของออเดอร์
+    if (!response.ok) {
+      let bodyText = '';
+      try { bodyText = await response.text(); } catch {}
+      console.error('Reports dashboard fetch failed', { url, status: response.status, statusText: response.statusText, body: bodyText });
+      if (response.status === 401) {
+        throw new Error('ไม่ได้รับอนุญาต (401)');
+      }
+      if (response.status === 403) {
+        throw new Error('ไม่มีสิทธิ์เข้าถึง (403)');
+      }
+      throw new Error(`Failed to fetch reports dashboard (status ${response.status})`);
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      console.error('Reports dashboard API returned failure', result);
+      throw new Error(result.error || 'รายงานไม่สำเร็จ');
+    }
+    const data = result.data;
+
+    // salesData: map revenueData (fallback to salesData if present)
+    const revenueData: any[] = data.chartData?.revenueData || [];
+    const salesSeries: any[] = data.chartData?.salesData || [];
+
+    const salesData = revenueData.map((r, i) => ({
+      month: r.month,
+      revenue: r.revenue || r.sales || 0,
+      orders: Math.floor((salesSeries[i]?.sales || r.revenue || 0) / 180),
+      customers: Math.floor(((salesSeries[i]?.sales || r.revenue || 0) / 180) * 0.7)
     }));
 
-    // แปลงชื่อวันให้เป็นภาษาไทย
-    const dayMapping: { [key: string]: string } = {
-      'อาทิตย์': 'อาทิตย์',
-      'จันทร์': 'จันทร์', 
-      'อังคาร': 'อังคาร',
-      'พุธ': 'พุธ',
-      'พฤหัส': 'พฤหัส',
-      'ศุกร์': 'ศุกร์',
-      'เสาร์': 'เสาร์'
-    };
-
-    const weeklyData = dailySales.map((item: any) => ({
-      day: dayMapping[item.name] || item.name,
-      orders: Math.floor(item.sales / 250) || 0, // สมมติออเดอร์เฉลี่ย 250 บาท
-      revenue: item.sales || 0
+    // weeklyData: synthesize from last 7 points of salesSeries or revenueData
+    const baseWeekly = salesSeries.slice(-7);
+    const dayNames = ['จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์','อาทิตย์'];
+    const weeklyData = baseWeekly.map((d, idx) => ({
+      day: dayNames[idx % dayNames.length],
+      orders: Math.floor((d.sales || 0) / 200),
+      revenue: Math.floor(d.sales || 0)
     }));
 
-    // Performance stats
-    const totalRevenue = dashboardStats?.revenue?.total || 0;
-    const totalOrders = dashboardStats?.orders?.total || 0;
-    const todayOrders = dashboardStats?.orders?.today || 0;
+    // topMenuItems: from salesReport.topSellingItems
+    const topSelling = data.salesReport?.topSellingItems || [];
+    const totalTopRevenue = topSelling.reduce((s: number, it: any) => s + it.revenue, 0) || 1;
+    const topMenuItems = topSelling.map((it: any) => ({
+      name: it.name,
+      orders: it.quantity,
+      revenue: it.revenue,
+      percentage: Math.round((it.revenue / totalTopRevenue) * 100)
+    })).slice(0,5);
+
+    // performanceStats: derive from salesReport + stats
+    const totalRevenue = data.salesReport?.totalSales || 0;
+    const totalOrders = data.salesReport?.totalOrders || 0;
+    const avgOrderValue = data.salesReport?.averageOrderValue || 0;
 
     const performanceStats = [
       {
-        label: "รายได้เดือนนี้",
+        label: 'รายได้เดือนนี้',
         value: `฿${totalRevenue.toLocaleString()}`,
-        change: "+15.5%",
-        changeType: "increase" as const,
-        description: "เทียบกับเดือนที่แล้ว"
+        change: '+0%',
+        changeType: 'increase' as const,
+        description: 'จำลองไม่มีข้อมูลเทียบ'
       },
       {
-        label: "คำสั่งซื้อเดือนนี้", 
+        label: 'คำสั่งซื้อเดือนนี้',
         value: totalOrders.toString(),
-        change: "+14.9%",
-        changeType: "increase" as const,
-        description: "เพิ่มขึ้นจากเดือนที่แล้ว"
+        change: '+0%',
+        changeType: 'increase' as const,
+        description: 'จำนวนออเดอร์ทั้งหมด'
       },
       {
-        label: "ลูกค้าใหม่",
+        label: 'ลูกค้าใหม่',
         value: Math.floor(totalOrders * 0.3).toString(),
-        change: "+16.0%", 
-        changeType: "increase" as const,
-        description: "ลูกค้าที่สั่งครั้งแรก"
+        change: '+0%',
+        changeType: 'increase' as const,
+        description: 'คาดการณ์ 30% ของออเดอร์'
       },
       {
-        label: "คะแนนเฉลี่ย",
-        value: "4.6",
-        change: "+0.2",
-        changeType: "increase" as const,
-        description: "จาก 5 คะแนน"
+        label: 'ค่าเฉลี่ยต่อออเดอร์',
+        value: `฿${avgOrderValue.toLocaleString()}`,
+        change: '+0%',
+        changeType: 'increase' as const,
+        description: 'Average Order Value'
       },
       {
-        label: "เวลาเตรียมเฉลี่ย",
-        value: "18 นาที",
-        change: "-2 นาที", 
-        changeType: "decrease" as const,
-        description: "ลดลงจากเดือนที่แล้ว"
+        label: 'ออเดอร์สำเร็จ',
+        value: (data.stats?.completedOrders || 0).toString(),
+        change: '+0%',
+        changeType: 'increase' as const,
+        description: 'คำสั่งซื้อสำเร็จ'
       },
       {
-        label: "เป้าหมายรายได้",
-        value: "89%",
-        change: "+12%",
-        changeType: "increase" as const,
-        description: "ของเป้าหมายเดือน"
+        label: 'ออเดอร์ค้าง',
+        value: (data.stats?.pendingOrders || 0).toString(),
+        change: '+0%',
+        changeType: 'decrease' as const,
+        description: 'คำสั่งซื้อรอดำเนินการ'
       }
     ];
 
-    return {
-      salesData,
-      weeklyData,
-      topMenuItems,
-      performanceStats
-    };
-
+    return { salesData, weeklyData, topMenuItems, performanceStats };
   } catch (error) {
-    console.error('Error fetching shop reports:', error);
+    console.error('Error fetching shop reports (unified):', error);
     throw error;
   }
 };

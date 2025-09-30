@@ -127,21 +127,22 @@ class ApiService {
 
   async register(data: RegisterRequest): Promise<AuthResponse> {
     try {
-      const response: AxiosResponse<AuthResponse> = await this.api.post('/api/auth/register', data)
+      const response: AxiosResponse<AuthResponse> = await this.api.post('/auth/register', data)
       const { token, user } = response.data
       this.setToken(token)
       this.setUser(user)
       return response.data
     } catch (error) {
-      // Re-throw the error to be handled by the calling component
       throw error
     }
   }
 
   async verifyToken(): Promise<{ user: User }> {
-    const response: AxiosResponse<{ user: User }> = await this.api.post('/api/auth/verify-token')
-    this.setUser(response.data.user)
-    return response.data
+    // Use POST /auth/verify-token (backend defines POST only)
+    const response: AxiosResponse<{ success?: boolean; data?: { user: User }; user?: User }> = await this.api.post('/auth/verify-token')
+    const user = (response.data as any).data?.user || (response.data as any).user
+    if (user) this.setUser(user)
+    return { user }
   }
 
   async logout(): Promise<void> {

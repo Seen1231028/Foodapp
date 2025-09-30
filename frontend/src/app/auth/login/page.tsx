@@ -118,6 +118,9 @@ export default function LoginPage() {
               <p className="text-sm text-blue-600 font-medium mb-2">บัญชีทดสอบ:</p>
               <div className="text-xs text-blue-600 space-y-1">
                 <div>• Admin: username = "admin", password = "admin123"</div>
+                <div>• shopowner: username = "shopowner", password = "shop123"</div>
+                <div>• customer: username = "customer", password = "customer123"</div>
+                <div>• finance: username = "finance", password = "finance123"</div>
                 <div>• User: สามารถสมัครสมาชิกใหม่ได้</div>
               </div>
             </div>

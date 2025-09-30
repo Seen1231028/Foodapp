@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -35,6 +36,7 @@ model User {
   
   role   Role    @relation(fields: [roleId], references: [id])
   orders Order[]
+  shops  Shop[]  @relation("UserShops")
   
   @@map("users")
 }
@@ -62,13 +64,31 @@ model Menu {
   isActive     Boolean  @default(true)
   preparationTime Int   @default(15) // minutes
   categoryId   Int
+  shopId       Int?     // Optional relation to a shop (restaurant)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
   category   Category    @relation(fields: [categoryId], references: [id])
+  shop       Shop?       @relation(fields: [shopId], references: [id])
   orderItems OrderItem[]
   
   @@map("menus")
+}
+
+model Shop {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  image       String?   // URL for shop banner / cover
+  isActive    Boolean   @default(true)
+  ownerId     Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  owner  User? @relation(name: "UserShops", fields: [ownerId], references: [id])
+  menus  Menu[]
+
+  @@map("shops")
 }
 
 model Order {

@@ -230,7 +230,7 @@ export default function ShopReportsPage() {
             <CardContent>
               <div className="space-y-4">
                 {reportData.topMenuItems.map((item, index) => (
-                  <div key={item.name} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={`${item.name}-${index}`} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">
                         {index + 1}

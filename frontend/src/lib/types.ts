@@ -67,6 +67,8 @@ export interface Menu {
   isActive: boolean
   preparationTime: number
   categoryId: number
+  // Relation to shop (restaurant) - may be null if not assigned
+  shopId?: number | null
   createdAt: string
   updatedAt: string
   category: {

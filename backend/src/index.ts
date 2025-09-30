@@ -8,6 +8,7 @@ import { dashboardRoutes } from "./routes/dashboard";
 import { analyticsRoutes } from "./routes/analytics_new";
 import financeRoutes from "./routes/finance";
 import reportsRoutes from "./routes/reports";
+import shopRoutes from "./routes/shops";
 import fs from "fs";
 import path from "path";
 
@@ -63,6 +64,7 @@ const app = new Elysia()
       .use(analyticsRoutes)
       .use(financeRoutes)
       .use(reportsRoutes)
+  .use(shopRoutes)
   )
   .onError(({ error, set }) => {
     console.error('API Error:', error)

@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Store, Plus, Eye, Edit, Users, DollarSign, Package, Phone, Mail, Calendar, User, MapPin, Trash2, Power } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Store, Plus, Eye, Edit, Users, DollarSign, Package, Phone, Mail, Calendar, User, MapPin, Trash2, Power } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import authUtils from '@/utils/auth';
 import '@/utils/cleanup'; // Auto-cleanup localStorage
 
@@ -533,10 +534,19 @@ function AddNewShopModal({ onUpdate }: { onUpdate: () => void }) {
   );
 }
 
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+const origin = API.endsWith('/api') ? API.slice(0,-4) : API;
+
+function imgUrl(rel?: string|null) { if (!rel) return ''; return rel.startsWith('/uploads') ? origin + rel : rel; }
+
 export default function AdminShops() {
   const [shopOwners, setShopOwners] = useState<ShopOwner[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedShop, setSelectedShop] = useState<number|null>(null);
+  const [menus, setMenus] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const token = (typeof window !== 'undefined') ? localStorage.getItem('token') : '';
 
   const toggleShopStatus = async (shopId: number, currentStatus: boolean) => {
     try {
@@ -651,6 +661,58 @@ export default function AdminShops() {
 
     fetchShopOwners();
   }, []);
+
+  useEffect(() => { 
+    if (selectedShop) {
+      fetchShopDetail(selectedShop);
+    }
+  }, [selectedShop]);
+
+  const fetchShopDetail = async (id: number) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/shops/${id}`);
+      const json = await res.json();
+      if (json.success) {
+        setMenus(json.data.menus);
+        setSelectedShop(id);
+      }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  const handleShopImage = async (file: File) => {
+    if (!selectedShop) return;
+    const b64 = await fileToBase64(file);
+    setUploading(true);
+    try {
+      const res = await fetch(`${API}/shops/${selectedShop}/image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ image: b64 })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShopOwners(prev => prev.map(s => s.id === selectedShop ? { ...s, image: json.data.image } : s));
+      }
+    } finally { setUploading(false); }
+  };
+
+  const handleMenuImage = async (menuId: number, file: File) => {
+    const b64 = await fileToBase64(file);
+    setUploading(true);
+    try {
+      const res = await fetch(`${API}/menus/${menuId}/image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ image: b64 })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMenus(prev => prev.map(m => m.id === menuId ? { ...m, image: json.data.image } : m));
+      }
+    } finally { setUploading(false); }
+  };
 
   if (loading) {
     return (
@@ -846,4 +908,13 @@ export default function AdminShops() {
       </div>
     </AppLayout>
   );
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
