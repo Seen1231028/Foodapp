@@ -1,19 +1,12 @@
-# Development Dockerfile สำหรับ Frontend
-FROM node:20-alpine
+FROM oven/bun:1.1.22
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+COPY package*.json bun.lockb* ./
+RUN bun install
 
-# Install dependencies
-RUN npm install
+COPY ./tsconfig.json ./
 
-# Copy source code
-COPY . .
-
-# Expose port
 EXPOSE 3000
 
-# Start development server with hot reload
-CMD ["npm", "run", "dev"]
+CMD ["bun", "run", "dev"]

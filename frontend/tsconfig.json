@@ -18,8 +18,9 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",              // ✅ เพิ่มบรรทัดนี้
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["src/*"]           // alias ทำงานกับ baseUrl
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

@@ -17,8 +17,18 @@ class ApiService {
   private api: AxiosInstance
 
   constructor() {
+    // Use different API URL for server-side vs client-side
+    const getApiUrl = () => {
+      if (typeof window === 'undefined') {
+        // Server-side (Docker internal network)
+        return process.env.NEXT_PUBLIC_API_URL || 'http://foodapp_backend:4000/api'
+      }
+      // Client-side (browser)
+      return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'
+    }
+
     this.api = axios.create({
-      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000',
+      baseURL: getApiUrl(),
       timeout: parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || '10000'),
       headers: {
         'Content-Type': 'application/json',
@@ -31,13 +41,32 @@ class ApiService {
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
       }
+      
+      // Add logging
+      console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, {
+        headers: config.headers,
+        params: config.params
+      })
+      
       return config
+    }, (error) => {
+      console.error('🚨 API Request Error:', error)
+      return Promise.reject(error)
     })
 
     // Response interceptor for error handling
     this.api.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        console.log(`✅ API Response: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data)
+        return response
+      },
       (error) => {
+        console.error(`❌ API Error: ${error.response?.status || 'Network'} ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        })
+        
         if (error.response?.status === 401) {
           this.clearToken()
         }
@@ -86,7 +115,7 @@ class ApiService {
 
   async login(data: LoginRequest): Promise<AuthResponse> {
     try {
-      const response: AxiosResponse<AuthResponse> = await this.api.post('/api/auth/login', data)
+      const response: AxiosResponse<AuthResponse> = await this.api.post('/auth/login', data)
       const { token, user } = response.data
       this.setToken(token)
       this.setUser(user)
@@ -122,7 +151,7 @@ class ApiService {
 
   async forgotPassword(data: { email: string }): Promise<{ message: string }> {
     try {
-      const response: AxiosResponse<{ message: string }> = await this.api.post('/api/auth/forgot-password', data)
+      const response: AxiosResponse<{ message: string }> = await this.api.post('/auth/forgot-password', data)
       return response.data
     } catch (error) {
       throw error
@@ -131,7 +160,7 @@ class ApiService {
 
   async resetPassword(data: { email: string; newPassword: string }): Promise<{ message: string }> {
     try {
-      const response: AxiosResponse<{ message: string }> = await this.api.post('/api/auth/reset-password', data)
+      const response: AxiosResponse<{ message: string }> = await this.api.post('/auth/reset-password', data)
       return response.data
     } catch (error) {
       throw error
@@ -144,28 +173,48 @@ class ApiService {
     search?: string
     available?: boolean
   }): Promise<PaginatedResponse<Menu>> {
-    const response: AxiosResponse<PaginatedResponse<Menu>> = await this.api.get('/api/menus', { params })
+    const response: AxiosResponse<PaginatedResponse<Menu>> = await this.api.get('/menus', { params })
     return response.data
   }
 
   async getMenu(id: number): Promise<ApiResponse<Menu>> {
-    const response: AxiosResponse<ApiResponse<Menu>> = await this.api.get(`/api/menus/${id}`)
+    const response: AxiosResponse<ApiResponse<Menu>> = await this.api.get(`/menus/${id}`)
     return response.data
   }
 
   async getCategories(): Promise<ApiResponse<Category[]>> {
-    const response: AxiosResponse<ApiResponse<Category[]>> = await this.api.get('/api/menus/categories')
+    const response: AxiosResponse<ApiResponse<Category[]>> = await this.api.get('/menus/categories')
+    return response.data
+  }
+
+  async createMenu(data: Partial<Menu>): Promise<ApiResponse<Menu>> {
+    const response: AxiosResponse<ApiResponse<Menu>> = await this.api.post('/menus', data)
+    return response.data
+  }
+
+  async updateMenu(id: number, data: Partial<Menu>): Promise<ApiResponse<Menu>> {
+    const response: AxiosResponse<ApiResponse<Menu>> = await this.api.put(`/menus/${id}`, data)
+    return response.data
+  }
+
+  async deleteMenu(id: number): Promise<ApiResponse<void>> {
+    const response: AxiosResponse<ApiResponse<void>> = await this.api.delete(`/menus/${id}`)
+    return response.data
+  }
+
+  async toggleMenuAvailability(id: number): Promise<ApiResponse<Menu>> {
+    const response: AxiosResponse<ApiResponse<Menu>> = await this.api.patch(`/menus/${id}/toggle-availability`)
     return response.data
   }
 
   // Order endpoints
   async getOrders(): Promise<PaginatedResponse<Order>> {
-    const response: AxiosResponse<PaginatedResponse<Order>> = await this.api.get('/api/orders')
+    const response: AxiosResponse<PaginatedResponse<Order>> = await this.api.get('/orders')
     return response.data
   }
 
   async getOrder(id: number): Promise<ApiResponse<Order>> {
-    const response: AxiosResponse<ApiResponse<Order>> = await this.api.get(`/api/orders/${id}`)
+    const response: AxiosResponse<ApiResponse<Order>> = await this.api.get(`/orders/${id}`)
     return response.data
   }
 
@@ -177,13 +226,27 @@ class ApiService {
     }>
     notes?: string
   }): Promise<ApiResponse<Order>> {
-    const response: AxiosResponse<ApiResponse<Order>> = await this.api.post('/api/orders', data)
+    const response: AxiosResponse<ApiResponse<Order>> = await this.api.post('/orders', data)
     return response.data
   }
 
   // Health check
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    const response: AxiosResponse<{ status: string; timestamp: string }> = await this.api.get('/api/health')
+    const response: AxiosResponse<{ status: string; timestamp: string }> = await this.api.get('/health')
+    return response.data
+  }
+
+  // Dashboard endpoints
+  async getShopStats(): Promise<ApiResponse<{
+    totalOrders: number
+    totalRevenue: number
+    totalCustomers: number
+    totalMenuItems: number
+    recentOrders: Order[]
+    dailyRevenue: Array<{ date: string; revenue: number }>
+    topMenuItems: Array<{ menuId: number; name: string; totalOrdered: number }>
+  }>> {
+    const response = await this.api.get('/dashboard/shop-stats')
     return response.data
   }
 }

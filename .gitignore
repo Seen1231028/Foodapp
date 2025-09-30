@@ -182,3 +182,5 @@ playwright-report/
 *.tar.gz
 Techstack.md
 DEMO_CREDENTIALS.md
+Foodapp.md
+sample_orders.sql

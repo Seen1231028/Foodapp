@@ -1,6 +1,5 @@
 'use client';
 
-import { DashboardLayout } from "@/components";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,97 +13,88 @@ import {
   Users,
   Star,
   Clock,
-  Target
+  Target,
+  Loader2
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { useState } from "react";
-
-// Mock data for reports
-const salesData = [
-  { month: 'ม.ค.', revenue: 45000, orders: 180, customers: 95 },
-  { month: 'ก.พ.', revenue: 52000, orders: 210, customers: 110 },
-  { month: 'มี.ค.', revenue: 48000, orders: 195, customers: 105 },
-  { month: 'เม.ย.', revenue: 61000, orders: 245, customers: 130 },
-  { month: 'พ.ค.', revenue: 58000, orders: 235, customers: 125 },
-  { month: 'มิ.ย.', revenue: 67000, orders: 270, customers: 145 }
-];
-
-const weeklyData = [
-  { day: 'จันทร์', orders: 25, revenue: 6200 },
-  { day: 'อังคาร', orders: 32, revenue: 7800 },
-  { day: 'พุธ', orders: 28, revenue: 6900 },
-  { day: 'พฤหัส', orders: 35, revenue: 8500 },
-  { day: 'ศุกร์', orders: 42, revenue: 10200 },
-  { day: 'เสาร์', orders: 48, revenue: 11800 },
-  { day: 'อาทิตย์', orders: 38, revenue: 9300 }
-];
-
-const topMenuItems = [
-  { name: 'ผัดไทย', orders: 156, revenue: 12480, percentage: 28 },
-  { name: 'ต้มยำกุ้ง', orders: 98, revenue: 11760, percentage: 18 },
-  { name: 'ข้าวผัดปู', orders: 87, revenue: 13050, percentage: 16 },
-  { name: 'แกงเขียวหวานไก่', orders: 76, revenue: 7600, percentage: 14 },
-  { name: 'มะม่วงข้าวเหนียว', orders: 124, revenue: 7440, percentage: 24 }
-];
+import { useState, useEffect } from "react";
+import { getShopReports, ShopReportData } from "@/utils/reportApi";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
-const performanceStats = [
-  { 
-    label: "รายได้เดือนนี้", 
-    value: "฿67,000", 
-    change: "+15.5%",
-    changeType: "increase",
-    icon: DollarSign,
-    description: "เทียบกับเดือนที่แล้ว"
-  },
-  { 
-    label: "คำสั่งซื้อเดือนนี้", 
-    value: "270", 
-    change: "+14.9%",
-    changeType: "increase",
-    icon: ShoppingBag,
-    description: "เพิ่มขึ้นจากเดือนที่แล้ว"
-  },
-  { 
-    label: "ลูกค้าใหม่", 
-    value: "145", 
-    change: "+16.0%",
-    changeType: "increase",
-    icon: Users,
-    description: "ลูกค้าที่สั่งครั้งแรก"
-  },
-  { 
-    label: "คะแนนเฉลี่ย", 
-    value: "4.6", 
-    change: "+0.2",
-    changeType: "increase",
-    icon: Star,
-    description: "จาก 5 คะแนน"
-  },
-  { 
-    label: "เวลาเตรียมเฉลี่ย", 
-    value: "18 นาที", 
-    change: "-2 นาที",
-    changeType: "decrease",
-    icon: Clock,
-    description: "ลดลงจากเดือนที่แล้ว"
-  },
-  { 
-    label: "เป้าหมายรายได้", 
-    value: "89%", 
-    change: "+12%",
-    changeType: "increase",
-    icon: Target,
-    description: "ของเป้าหมายเดือน"
-  }
-];
-
 export default function ShopReportsPage() {
   const [timeRange, setTimeRange] = useState("month");
+  const [reportData, setReportData] = useState<ShopReportData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // ดึงข้อมูลจาก API
+  useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const data = await getShopReports();
+        setReportData(data);
+      } catch (err) {
+        console.error('Error fetching reports:', err);
+        setError('ไม่สามารถดึงข้อมูลรายงานได้');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReports();
+  }, [timeRange]); // เมื่อเปลี่ยน timeRange ให้โหลดใหม่
+
+  // ถ้ากำลังโหลด
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">รายงานยอดขาย</h1>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-orange-500" />
+            <p className="text-gray-600">กำลังโหลดข้อมูลรายงาน...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ถ้ามี error
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">รายงานยอดขาย</h1>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()}>
+              ลองใหม่อีกครั้ง
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ถ้าไม่มีข้อมูล
+  if (!reportData) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">รายงานยอดขาย</h1>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <p className="text-gray-600">ไม่พบข้อมูลรายงาน</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <DashboardLayout title="รายงานยอดขาย">
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">รายงานยอดขาย</h1>
+      
       <div className="space-y-6">
         {/* Header with Export */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -133,8 +123,19 @@ export default function ShopReportsPage() {
 
         {/* Performance Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {performanceStats.map((stat) => {
-            const IconComponent = stat.icon;
+          {reportData.performanceStats.map((stat) => {
+            const getIcon = (label: string) => {
+              switch (label) {
+                case "รายได้เดือนนี้": return DollarSign;
+                case "คำสั่งซื้อเดือนนี้": return ShoppingBag;
+                case "ลูกค้าใหม่": return Users;
+                case "คะแนนเฉลี่ย": return Star;
+                case "เวลาเตรียมเฉลี่ย": return Clock;
+                case "เป้าหมายรายได้": return Target;
+                default: return DollarSign;
+              }
+            };
+            const IconComponent = getIcon(stat.label);
             return (
               <Card key={stat.label}>
                 <CardContent className="p-6">
@@ -173,7 +174,7 @@ export default function ShopReportsPage() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salesData}>
+                <LineChart data={reportData.salesData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
@@ -200,7 +201,7 @@ export default function ShopReportsPage() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={weeklyData}>
+                <BarChart data={reportData.weeklyData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="day" />
                   <YAxis />
@@ -228,7 +229,7 @@ export default function ShopReportsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {topMenuItems.map((item, index) => (
+                {reportData.topMenuItems.map((item, index) => (
                   <div key={item.name} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">
@@ -258,7 +259,7 @@ export default function ShopReportsPage() {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={topMenuItems}
+                    data={reportData.topMenuItems}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -267,7 +268,7 @@ export default function ShopReportsPage() {
                     fill="#8884d8"
                     dataKey="percentage"
                   >
-                    {topMenuItems.map((entry, index) => (
+                    {reportData.topMenuItems.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -325,6 +326,6 @@ export default function ShopReportsPage() {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }

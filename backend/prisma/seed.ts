@@ -152,6 +152,120 @@ async function main() {
   })
 
   console.log('✅ Demo users created')
+
+  // Create sample menu items
+  const existingCategories = await prisma.category.findMany();
+  const mainCourse = existingCategories.find(c => c.name === 'อาหารจานหลัก');
+  const snacks = existingCategories.find(c => c.name === 'อาหารทานเล่น');
+  const drinks = existingCategories.find(c => c.name === 'เครื่องดื่ม');
+  const desserts = existingCategories.find(c => c.name === 'ของหวาน');
+
+  if (mainCourse) {
+    await prisma.menu.createMany({
+      data: [
+        {
+          name: 'ข้าวผัดกุ้ง',
+          description: 'ข้าวผัดกุ้งสดรสเข้มข้น เสิร์ฟพร้อมผักกาดดอง',
+          price: 80,
+          image: '/api/placeholder/300/200',
+          categoryId: mainCourse.id,
+          preparationTime: 15
+        },
+        {
+          name: 'ก๋วยเตี๋ยวต้มยำ',
+          description: 'ก๋วยเตี๋ยวต้มยำกุ้งรสจัดจ้าน เผ็ดร้อนตามแบบไทยแท้',
+          price: 65,
+          image: '/api/placeholder/300/200',
+          categoryId: mainCourse.id,
+          preparationTime: 20
+        },
+        {
+          name: 'ผัดไทยกุ้งสด',
+          description: 'ผัดไทยกุ้งสดเส้นหมี่ รสชาติหวานเปรี้ยว',
+          price: 85,
+          image: '/api/placeholder/300/200',
+          categoryId: mainCourse.id,
+          preparationTime: 18
+        }
+      ]
+    });
+  }
+
+  if (drinks) {
+    await prisma.menu.createMany({
+      data: [
+        {
+          name: 'ชาไทยเย็น',
+          description: 'ชาไทยเย็นหวานมัน เสิร์ฟพร้อมน้ำแข็ง',
+          price: 25,
+          image: '/api/placeholder/300/200',
+          categoryId: drinks.id,
+          preparationTime: 5
+        },
+        {
+          name: 'กาแฟดำร้อน',
+          description: 'กาแฟคั่วใหม่ รสชาติเข้มข้น',
+          price: 30,
+          image: '/api/placeholder/300/200',
+          categoryId: drinks.id,
+          preparationTime: 8
+        }
+      ]
+    });
+  }
+
+  // Create sample orders
+  const customerUser = await prisma.user.findFirst({
+    where: { username: 'customer' }
+  });
+
+  const menus = await prisma.menu.findMany();
+
+  if (customerUser && menus.length > 0) {
+    // Create sample orders
+    for (let i = 1; i <= 5; i++) {
+      const order = await prisma.order.create({
+        data: {
+          orderNumber: `ORD-${Date.now()}-${i}`,
+          userId: customerUser.id,
+          status: i <= 3 ? 'COMPLETED' : 'PENDING',
+          totalAmount: 120 + (i * 10),
+          notes: `Test order ${i}`,
+        }
+      });
+
+      // Add order items
+      await prisma.orderItem.createMany({
+        data: [
+          {
+            orderId: order.id,
+            menuId: menus[0].id,
+            quantity: 1,
+            price: menus[0].price
+          },
+          {
+            orderId: order.id,
+            menuId: menus[1]?.id || menus[0].id,
+            quantity: 2,
+            price: menus[1]?.price || menus[0].price
+          }
+        ]
+      });
+
+      // Add payment
+      await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          amount: order.totalAmount,
+          method: 'CASH',
+          status: i <= 3 ? 'PAID' : 'PENDING',
+          paidAt: i <= 3 ? new Date() : null
+        }
+      });
+    }
+  }
+
+  console.log('✅ Sample menus and orders created')
   console.log('📋 Demo login credentials:')
   console.log('   Admin: admin / admin123')
   console.log('   Shop Owner: shopowner / shop123')

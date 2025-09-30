@@ -1,11 +1,15 @@
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: foodapp_frontend
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend:/app
+      - ./frontend/src:/app/src:delegated
+      - ./frontend/public:/app/public:delegated
+      - ./frontend/tsconfig.json:/app/tsconfig.json:delegated
       - /app/node_modules
       - /app/.next
     environment:
@@ -16,16 +20,22 @@ services:
       - foodapp-network
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: foodapp_backend
     ports:
       - "4000:4000"
     volumes:
-      - ./backend:/app
+      - ./backend/src:/app/src:delegated
+      - ./backend/prisma:/app/prisma:delegated
+      - ./backend/.env:/app/.env:delegated
+      - ./backend/uploads:/app/uploads
       - /app/node_modules
+    env_file:
+      - ./backend/.env
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/foodapp
-      NODE_ENV: development
+      - NODE_ENV=development
     depends_on:
       - db
     networks:

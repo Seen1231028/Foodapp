@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
+import authUtils from '@/utils/auth';
+import '@/utils/cleanup'; // Auto-cleanup localStorage
 
 const loginSchema = z.object({
   username: z.string().min(1, "กรุณากรอกชื่อผู้ใช้"),
@@ -22,7 +23,8 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
-  const { login, isLoading } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const {
@@ -34,19 +36,67 @@ export default function LoginPage() {
   });
 
   const onSubmit = async (data: LoginForm) => {
-    const success = await login(data);
-    if (success) {
-      console.log('Login successful, redirecting...');
-      // เพิ่ม delay เล็กน้อยแล้ว force refresh
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1000);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log('Submitting login data:', data);
+      
+      // Call real API
+      const response = await fetch('http://localhost:4000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      console.log('Login response status:', response.status);
+      
+      let result;
+      try {
+        const text = await response.text();
+        console.log('Raw response:', text);
+        result = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        result = {};
+      }
+      
+      console.log('Login response data:', result);
+
+      if (response.ok && result.success) {
+        console.log('Login successful, saving auth data...');
+        
+        // Save auth data using authUtils (indirect via localStorage)
+        localStorage.setItem('token', result.data.token);
+        localStorage.setItem('user', JSON.stringify(result.data.user));
+        
+        console.log('Auth data saved, redirecting...');
+        
+        // Redirect based on role
+        if (result.data.user.role.name === 'admin') {
+          console.log('Redirecting to admin panel...');
+          router.push('/admin/users');
+        } else {
+          console.log('Redirecting to home...');
+          router.push('/');
+        }
+      } else {
+        console.error('Login failed:', result);
+        setError(result.error || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-2">ZeenZilla</h1>
           <p className="text-muted-foreground">ระบบสั่งอาหารออนไลน์</p>
@@ -57,6 +107,21 @@ export default function LoginPage() {
             <CardTitle className="text-2xl text-center">เข้าสู่ระบบ</CardTitle>
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            {/* Demo credentials info */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-600 font-medium mb-2">บัญชีทดสอบ:</p>
+              <div className="text-xs text-blue-600 space-y-1">
+                <div>• Admin: username = "admin", password = "admin123"</div>
+                <div>• User: สามารถสมัครสมาชิกใหม่ได้</div>
+              </div>
+            </div>
+            
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="username">ชื่อผู้ใช้</Label>

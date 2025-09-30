@@ -1,356 +1,213 @@
 'use client';
 
-import { DashboardLayout } from "@/components";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Truck, 
-  Search,
-  Eye,
-  AlertTriangle,
-  Package,
-  DollarSign,
-  Users,
-  TrendingUp
-} from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ShoppingCart, Clock, CheckCircle, RefreshCw } from 'lucide-react';
+import apiService from '@/lib/api';
+import { Order } from '@/lib/types';
 
-// Mock data for orders
-const orders = [
-  {
-    id: "ORD-2024-001",
-    customerName: "คุณสมชาย ใจดี",
-    phone: "02-123-4567",
-    items: [
-      { name: "ผัดไทย", quantity: 2, price: 80 },
-      { name: "ต้มยำกุ้ง", quantity: 1, price: 120 }
-    ],
-    total: 280,
-    status: "pending",
-    orderTime: "2024-03-16T14:30:00",
-    deliveryAddress: "123 ถนนสุขุมวิท แขวงคลองตัน เขตคลองตัน กรุงเทพฯ",
-    paymentMethod: "เงินสด",
-    notes: "ไม่ใส่ผักชี"
-  },
-  {
-    id: "ORD-2024-002",
-    customerName: "คุณวิภา สวยงาม",
-    phone: "02-987-6543",
-    items: [
-      { name: "แกงเขียวหวานไก่", quantity: 1, price: 100 },
-      { name: "ข้าวผัดปู", quantity: 1, price: 150 }
-    ],
-    total: 250,
-    status: "preparing",
-    orderTime: "2024-03-16T13:45:00",
-    deliveryAddress: "456 ถนนสีลม แขวงสีลม เขตบางรัก กรุงเทพฯ",
-    paymentMethod: "โอนเงิน",
-    notes: "เผ็ดน้อย"
-  },
-  {
-    id: "ORD-2024-003",
-    customerName: "คุณอรุณ เช้าใส",
-    phone: "02-555-1234",
-    items: [
-      { name: "มะม่วงข้าวเหนียว", quantity: 2, price: 60 }
-    ],
-    total: 120,
-    status: "ready",
-    orderTime: "2024-03-16T12:20:00",
-    deliveryAddress: "789 ถนนรัชดาภิเษก แขวงดินแดง เขตดินแดง กรุงเทพฯ",
-    paymentMethod: "บัตรเครดิต",
-    notes: ""
-  },
-  {
-    id: "ORD-2024-004",
-    customerName: "คุณมาลี ดอกไม้",
-    phone: "02-777-8888",
-    items: [
-      { name: "ผัดไทย", quantity: 1, price: 80 },
-      { name: "ต้มยำกุ้ง", quantity: 1, price: 120 },
-      { name: "มะม่วงข้าวเหนียว", quantity: 1, price: 60 }
-    ],
-    total: 260,
-    status: "delivering",
-    orderTime: "2024-03-16T11:15:00",
-    deliveryAddress: "321 ถนนพหลโยธิน แขวงลาดยาว เขตจตุจักร กรุงเทพฯ",
-    paymentMethod: "เงินสด",
-    notes: "โทรก่อนถึง"
-  },
-  {
-    id: "ORD-2024-005",
-    customerName: "คุณประเสริฐ ดีเด่น",
-    phone: "02-999-0000",
-    items: [
-      { name: "ข้าวผัดปู", quantity: 2, price: 150 }
-    ],
-    total: 300,
-    status: "completed",
-    orderTime: "2024-03-16T10:30:00",
-    deliveryAddress: "654 ถนนเพชรบุรี แขวงมักกะสัน เขตราชเทวี กรุงเทพฯ",
-    paymentMethod: "โอนเงิน",
-    notes: "ห่อแยก"
-  }
-];
+const getStatusText = (status: string) => {
+  const statusMap = {
+    'PENDING': 'รอดำเนินการ',
+    'CONFIRMED': 'ยืนยันแล้ว',
+    'PREPARING': 'กำลังเตรียม',
+    'READY': 'พร้อมเสิร์ฟ',
+    'COMPLETED': 'เสร็จสิ้น',
+    'CANCELLED': 'ยกเลิก'
+  };
+  return statusMap[status as keyof typeof statusMap] || status;
+};
 
-const getOrderStatusBadge = (status: string) => {
+const getStatusColor = (status: string) => {
   switch (status) {
-    case "pending":
-      return <Badge variant="secondary" className="flex items-center gap-1">
-        <Clock className="h-3 w-3" />
-        รอยืนยัน
-      </Badge>;
-    case "preparing":
-      return <Badge variant="default" className="flex items-center gap-1">
-        <Package className="h-3 w-3" />
-        กำลังเตรียม
-      </Badge>;
-    case "ready":
-      return <Badge variant="outline" className="flex items-center gap-1">
-        <CheckCircle className="h-3 w-3" />
-        พร้อมส่ง
-      </Badge>;
-    case "delivering":
-      return <Badge className="flex items-center gap-1">
-        <Truck className="h-3 w-3" />
-        กำลังส่ง
-      </Badge>;
-    case "completed":
-      return <Badge variant="outline" className="flex items-center gap-1 text-green-600">
-        <CheckCircle className="h-3 w-3" />
-        เสร็จสิ้น
-      </Badge>;
-    case "cancelled":
-      return <Badge variant="destructive" className="flex items-center gap-1">
-        <XCircle className="h-3 w-3" />
-        ยกเลิก
-      </Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
+    case 'PENDING': return 'orange';
+    case 'CONFIRMED': return 'blue';
+    case 'PREPARING': return 'yellow';
+    case 'READY': return 'purple';
+    case 'COMPLETED': return 'green';
+    case 'CANCELLED': return 'red';
+    default: return 'gray';
   }
 };
 
-const getStatusAction = (status: string, orderId: string) => {
-  switch (status) {
-    case "pending":
-      return (
-        <div className="flex items-center gap-2">
-          <Button size="sm">ยืนยัน</Button>
-          <Button variant="outline" size="sm">ปฏิเสธ</Button>
+const formatCurrency = (amount: number | string) => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  return `฿${num.toLocaleString()}`;
+};
+
+const getTimeAgo = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'เมื่อกี้นี้';
+  if (diffMins < 60) return `${diffMins} นาทีที่แล้ว`;
+  if (diffHours < 24) return `${diffHours} ชั่วโมงที่แล้ว`;
+  return `${diffDays} วันที่แล้ว`;
+};
+
+export default function ShopOrders() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await apiService.getOrders();
+      
+      if (response.success && response.data) {
+        setOrders(response.data);
+      } else {
+        throw new Error('ไม่สามารถดึงข้อมูลคำสั่งซื้อได้');
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch orders');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">จัดการออร์เดอร์</h1>
+        <div className="text-center py-8">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button 
+            onClick={fetchOrders}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            ลองใหม่อีกครั้ง
+          </button>
         </div>
-      );
-    case "preparing":
-      return <Button size="sm">พร้อมส่ง</Button>;
-    case "ready":
-      return <Button size="sm">เริ่มส่ง</Button>;
-    case "delivering":
-      return <Button size="sm" variant="outline">ส่งเสร็จ</Button>;
-    default:
-      return <Button variant="outline" size="sm">
-        <Eye className="h-4 w-4" />
-      </Button>;
+      </div>
+    );
   }
-};
 
-export default function ShopOrdersPage() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ทั้งหมด");
-
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "ทั้งหมด" || order.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  // Statistics
-  const totalOrders = orders.length;
-  const pendingOrders = orders.filter(order => order.status === "pending").length;
-  const preparingOrders = orders.filter(order => order.status === "preparing").length;
-  const deliveringOrders = orders.filter(order => order.status === "delivering").length;
-  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+  const pendingOrders = orders.filter(order => order.status === 'PENDING');
+  const preparingOrders = orders.filter(order => order.status === 'PREPARING');
+  const completedOrders = orders.filter(order => order.status === 'COMPLETED');
 
   return (
-    <DashboardLayout title="จัดการคำสั่งซื้อ">
-      <div className="space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">คำสั่งทั้งหมด</p>
-                  <p className="text-2xl font-bold text-blue-600">{totalOrders}</p>
-                </div>
-                <Package className="h-8 w-8 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">รอยืนยัน</p>
-                  <p className="text-2xl font-bold text-orange-600">{pendingOrders}</p>
-                </div>
-                <Clock className="h-8 w-8 text-orange-600" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">กำลังเตรียม</p>
-                  <p className="text-2xl font-bold text-yellow-600">{preparingOrders}</p>
-                </div>
-                <Package className="h-8 w-8 text-yellow-600" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">กำลังส่ง</p>
-                  <p className="text-2xl font-bold text-purple-600">{deliveringOrders}</p>
-                </div>
-                <Truck className="h-8 w-8 text-purple-600" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">รายได้วันนี้</p>
-                  <p className="text-2xl font-bold text-green-600">฿{totalRevenue.toLocaleString()}</p>
-                </div>
-                <DollarSign className="h-8 w-8 text-green-600" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Alert for urgent orders */}
-        {pendingOrders > 0 && (
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              มี {pendingOrders} คำสั่งซื้อรอการยืนยัน โปรดตรวจสอบและดำเนินการ
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Orders Management */}
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">จัดการออร์เดอร์</h1>
+        <Button onClick={fetchOrders} variant="outline">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          รีเฟรช
+        </Button>
+      </div>
+      
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <CardTitle>รายการคำสั่งซื้อ</CardTitle>
-                <CardDescription>จัดการคำสั่งซื้อของร้านคุณ</CardDescription>
-              </div>
+          <CardContent className="flex items-center p-6">
+            <Clock className="h-8 w-8 text-orange-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">รอดำเนินการ</p>
+              <p className="text-2xl font-bold text-orange-600">{pendingOrders.length}</p>
             </div>
-          </CardHeader>
-          
-          <CardContent>
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="ค้นหาเลขคำสั่งซื้อหรือชื่อลูกค้า..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ทั้งหมด">ทั้งหมด</SelectItem>
-                  <SelectItem value="pending">รอยืนยัน</SelectItem>
-                  <SelectItem value="preparing">กำลังเตรียม</SelectItem>
-                  <SelectItem value="ready">พร้อมส่ง</SelectItem>
-                  <SelectItem value="delivering">กำลังส่ง</SelectItem>
-                  <SelectItem value="completed">เสร็จสิ้น</SelectItem>
-                  <SelectItem value="cancelled">ยกเลิก</SelectItem>
-                </SelectContent>
-              </Select>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center p-6">
+            <ShoppingCart className="h-8 w-8 text-blue-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">กำลังเตรียม</p>
+              <p className="text-2xl font-bold text-blue-600">{preparingOrders.length}</p>
             </div>
-
-            {/* Orders Table */}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>เลขคำสั่งซื้อ</TableHead>
-                  <TableHead>ลูกค้า</TableHead>
-                  <TableHead>รายการอาหาร</TableHead>
-                  <TableHead>ยอดรวม</TableHead>
-                  <TableHead>เวลา</TableHead>
-                  <TableHead>สถานะ</TableHead>
-                  <TableHead>การดำเนินการ</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.id}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{order.customerName}</div>
-                        <div className="text-sm text-muted-foreground">{order.phone}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {order.items.map((item, index) => (
-                          <div key={index} className="text-sm">
-                            {item.name} x{item.quantity}
-                          </div>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">฿{order.total.toLocaleString()}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        {new Date(order.orderTime).toLocaleDateString('th-TH')}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(order.orderTime).toLocaleTimeString('th-TH')}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getOrderStatusBadge(order.status)}</TableCell>
-                    <TableCell>{getStatusAction(order.status, order.id)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            {filteredOrders.length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">ไม่พบคำสั่งซื้อที่ตรงกับเงื่อนไขการค้นหา</p>
-              </div>
-            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center p-6">
+            <CheckCircle className="h-8 w-8 text-green-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">เสร็จสิ้น</p>
+              <p className="text-2xl font-bold text-green-600">{completedOrders.length}</p>
+            </div>
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+
+      {/* Orders List */}
+      {orders.length === 0 ? (
+        <div className="text-center py-8">
+          <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">ไม่มีออร์เดอร์</h3>
+          <p className="mt-1 text-sm text-gray-500">ยังไม่มีลูกค้าสั่งซื้อ</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {orders.map((order) => (
+            <Card key={order.id} className="border-l-4 border-l-blue-500">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg">ออร์เดอร์ #{order.orderNumber}</CardTitle>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {getTimeAgo(order.createdAt)}
+                    </p>
+                  </div>
+                  <Badge variant="outline" style={{ color: getStatusColor(order.status) }}>
+                    {getStatusText(order.status)}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium mb-2">รายการสั่งซื้อ:</h4>
+                    <div className="space-y-1">
+                      {order.items?.map((item, index) => (
+                        <div key={index} className="flex justify-between text-sm">
+                          <span>{item.menu?.name} x {item.quantity}</span>
+                          <span>{formatCurrency(Number(item.price) * item.quantity)}</span>
+                        </div>
+                      )) || <p className="text-sm text-gray-500">ไม่มีรายการ</p>}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">รายละเอียด:</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>ยอดรวม:</span>
+                        <span className="font-bold">{formatCurrency(Number(order.totalAmount))}</span>
+                      </div>
+                      {order.notes && (
+                        <div>
+                          <span className="text-gray-600">หมายเหตุ:</span>
+                          <p className="text-gray-800">{order.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

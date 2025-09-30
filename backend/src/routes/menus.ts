@@ -1,11 +1,70 @@
 import { Elysia } from "elysia";
 import { PrismaClient } from "@prisma/client";
+import { jwt } from '@elysiajs/jwt'
+import { cors } from '@elysiajs/cors'
 
 const prisma = new PrismaClient();
 
 export const menuRoutes = new Elysia({ prefix: "/menus" })
-  .get("/", async ({ query, set }) => {
+  .use(cors())
+  .use(jwt({
+    name: 'jwt',
+    secret: process.env.JWT_SECRET || 'default-secret'
+  }))
+  .derive(async ({ jwt, headers, request }) => {
+    // Skip auth for GET requests (public menu viewing)
+    if (request.method === 'GET') {
+      return {}
+    }
+
     try {
+      const authHeader = headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        throw new Error('No token provided')
+      }
+
+      const token = authHeader.split(' ')[1]
+      
+      // Mock token for development
+      if (token === 'mock-token') {
+        const mockUser = {
+          id: 1,
+          name: 'Mock Admin',
+          email: 'admin@mock.com',
+          role: { name: 'admin' }
+        }
+        return { user: mockUser }
+      }
+      
+      const payload = await jwt.verify(token) as any
+      if (!payload || !payload.userId) {
+        throw new Error('Invalid token')
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: Number(payload.userId) },
+        include: { role: true }
+      })
+
+      if (!user) {
+        throw new Error('User not found')
+      }
+
+      // Check if user has permission for menu management
+      if (!['shop_owner', 'admin'].includes(user.role.name)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      return { user }
+    } catch (error) {
+      console.error('Auth error:', error)
+      throw error
+    }
+  })
+  .get("/", async ({ query, set }: any) => {
+    try {
+      console.log('📋 GET /menus called with query:', query)
+      
       const { category, search, available } = query as {
         category?: string;
         search?: string;
@@ -29,6 +88,8 @@ export const menuRoutes = new Elysia({ prefix: "/menus" })
         where.isAvailable = available === 'true';
       }
 
+      console.log('🔍 Query where condition:', JSON.stringify(where, null, 2))
+
       const menus = await prisma.menu.findMany({
         where,
         include: {
@@ -42,18 +103,20 @@ export const menuRoutes = new Elysia({ prefix: "/menus" })
         orderBy: { createdAt: 'desc' }
       });
 
+      console.log(`✅ Found ${menus.length} menus`)
+
       return {
         success: true,
         data: menus,
         count: menus.length
       };
     } catch (error) {
-      console.error("Get menus error:", error);
+      console.error("❌ Get menus error:", error);
       set.status = 500;
-      return { error: "เกิดข้อผิดพลาดในการดึงข้อมูลเมนู" };
+      return { error: "เกิดข้อผิดพลาดในการดึงข้อมูลเมนู", details: String(error) };
     }
   })
-  .get("/categories", async ({ set }) => {
+  .get("/categories", async ({ set }: any) => {
     try {
       const categories = await prisma.category.findMany({
         where: { isActive: true },
@@ -70,7 +133,7 @@ export const menuRoutes = new Elysia({ prefix: "/menus" })
       return { error: "เกิดข้อผิดพลาดในการดึงข้อมูลหมวดหมู่" };
     }
   })
-  .get("/:id", async ({ params, set }) => {
+  .get("/:id", async ({ params, set }: any) => {
     try {
       const id = parseInt(params.id);
       
@@ -103,5 +166,166 @@ export const menuRoutes = new Elysia({ prefix: "/menus" })
       console.error("Get menu error:", error);
       set.status = 500;
       return { error: "เกิดข้อผิดพลาดในการดึงข้อมูลเมนู" };
+    }
+  })
+  
+  // Management endpoints (require authentication)
+  .post("/", async ({ body, user, set }: any) => {
+    try {
+      const { name, description, price, categoryId, image, preparationTime } = body as {
+        name: string
+        description?: string
+        price: number
+        categoryId: number
+        image?: string
+        preparationTime?: number
+      }
+
+      const menu = await prisma.menu.create({
+        data: {
+          name,
+          description,
+          price,
+          categoryId,
+          image,
+          preparationTime: preparationTime || 15
+        },
+        include: {
+          category: {
+            select: { id: true, name: true }
+          }
+        }
+      })
+
+      return {
+        success: true,
+        data: menu,
+        message: 'เพิ่มเมนูใหม่สำเร็จ'
+      }
+    } catch (error) {
+      console.error("Create menu error:", error);
+      set.status = 500;
+      return { error: "เกิดข้อผิดพลาดในการเพิ่มเมนู" };
+    }
+  })
+  
+  .put("/:id", async ({ params, body, user, set }: any) => {
+    try {
+      const id = parseInt(params.id as string);
+      const { name, description, price, categoryId, image, preparationTime, isAvailable } = body as {
+        name?: string
+        description?: string
+        price?: number
+        categoryId?: number
+        image?: string
+        preparationTime?: number
+        isAvailable?: boolean
+      }
+
+      // Check if menu exists
+      const existingMenu = await prisma.menu.findFirst({
+        where: { id, isActive: true }
+      });
+
+      if (!existingMenu) {
+        set.status = 404;
+        return { error: "ไม่พบเมนูที่ระบุ" };
+      }
+
+      const updatedMenu = await prisma.menu.update({
+        where: { id },
+        data: {
+          ...(name && { name }),
+          ...(description !== undefined && { description }),
+          ...(price && { price }),
+          ...(categoryId && { categoryId }),
+          ...(image !== undefined && { image }),
+          ...(preparationTime && { preparationTime }),
+          ...(isAvailable !== undefined && { isAvailable })
+        },
+        include: {
+          category: {
+            select: { id: true, name: true }
+          }
+        }
+      })
+
+      return {
+        success: true,
+        data: updatedMenu,
+        message: 'อัพเดตเมนูสำเร็จ'
+      }
+    } catch (error) {
+      console.error("Update menu error:", error);
+      set.status = 500;
+      return { error: "เกิดข้อผิดพลาดในการอัพเดตเมนู" };
+    }
+  })
+  
+  .delete("/:id", async ({ params, user, set }: any) => {
+    try {
+      const id = parseInt(params.id as string);
+
+      // Check if menu exists
+      const existingMenu = await prisma.menu.findFirst({
+        where: { id, isActive: true }
+      });
+
+      if (!existingMenu) {
+        set.status = 404;
+        return { error: "ไม่พบเมนูที่ระบุ" };
+      }
+
+      // Soft delete - mark as inactive
+      await prisma.menu.update({
+        where: { id },
+        data: { isActive: false }
+      })
+
+      return {
+        success: true,
+        message: 'ลบเมนูสำเร็จ'
+      }
+    } catch (error) {
+      console.error("Delete menu error:", error);
+      set.status = 500;
+      return { error: "เกิดข้อผิดพลาดในการลบเมนู" };
+    }
+  })
+  
+  .patch("/:id/availability", async ({ params, body, user, set }: any) => {
+    try {
+      const id = parseInt(params.id as string);
+      const { isAvailable } = body as { isAvailable: boolean }
+
+      // Check if menu exists
+      const existingMenu = await prisma.menu.findFirst({
+        where: { id, isActive: true }
+      });
+
+      if (!existingMenu) {
+        set.status = 404;
+        return { error: "ไม่พบเมนูที่ระบุ" };
+      }
+
+      const updatedMenu = await prisma.menu.update({
+        where: { id },
+        data: { isAvailable },
+        include: {
+          category: {
+            select: { id: true, name: true }
+          }
+        }
+      })
+
+      return {
+        success: true,
+        data: updatedMenu,
+        message: `${isAvailable ? 'เปิด' : 'ปิด'}จำหน่ายเมนูสำเร็จ`
+      }
+    } catch (error) {
+      console.error("Toggle menu availability error:", error);
+      set.status = 500;
+      return { error: "เกิดข้อผิดพลาดในการเปลี่ยนสถานะเมนู" };
     }
   });

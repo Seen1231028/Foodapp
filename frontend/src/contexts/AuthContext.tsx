@@ -62,11 +62,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const logout = () => {
-    apiService.logout()
-    setUser(null)
-    toast.success('ออกจากระบบสำเร็จ')
-    router.push('/')
+  const logout = async () => {
+    try {
+      await apiService.logout()
+      setUser(null)
+      
+      // Clear any remaining auth data
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+      }
+      
+      toast.success('ออกจากระบบสำเร็จ')
+      
+      // Redirect to home page
+      router.push('/')
+      
+      // Force page reload to ensure clean state
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Even if there's an error, clear local data
+      setUser(null)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+      }
+      router.push('/')
+    }
   }
 
   const checkAuth = async () => {
