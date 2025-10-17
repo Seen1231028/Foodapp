@@ -184,3 +184,11 @@ Techstack.md
 DEMO_CREDENTIALS.md
 Foodapp.md
 sample_orders.sql
+
+# === TEST & SEED FILES ===
+backend/test-*.ts
+backend/seed-*.ts
+backend/add-*.ts
+backend/check-*.ts
+backend/fix-*.ts
+backend/create-*.ts
