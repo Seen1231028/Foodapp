@@ -192,3 +192,7 @@ backend/add-*.ts
 backend/check-*.ts
 backend/fix-*.ts
 backend/create-*.ts
+
+# === DOCUMENTATION (Development Only) ===
+LOGGING_SYSTEM.md
+backend/entrypoint.dev.sh
