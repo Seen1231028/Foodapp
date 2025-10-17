@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { DashboardLayout } from '@/components/DashboardLayout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -8,6 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, AreaChart, Area 
@@ -15,7 +21,7 @@ import {
 import { 
   TrendingUp, TrendingDown, DollarSign, ShoppingCart, 
   Users, Calendar, Download, Filter, Search, Target,
-  Activity, Award, ChevronRight, Clock
+  Activity, Award, ChevronRight, Clock, FileText, FileJson, Printer
 } from 'lucide-react'
 
 interface SalesData {
@@ -44,6 +50,27 @@ interface SalesMetrics {
   totalCustomers: number;
   growthRate: number;
   conversionRate: number;
+  orderGrowthRate?: number;
+  newCustomerCount?: number;
+}
+
+interface HourlyData {
+  hour: string;
+  orders: number;
+  sales: number;
+}
+
+interface MonthlySalesData {
+  month: string;
+  sales: number;
+  orders: number;
+  avgOrder: number;
+}
+
+interface CategoryData {
+  name: string;
+  value: number;
+  color: string;
 }
 
 export default function FinanceSalesPage() {
@@ -51,127 +78,185 @@ export default function FinanceSalesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [activeTab, setActiveTab] = useState('overview')
+  const [loading, setLoading] = useState(true)
 
-  // Mock sales data
-  const salesData: SalesData[] = [
-    { period: 'Mon', totalSales: 45000, orderCount: 245, avgOrderValue: 183.67, newCustomers: 32 },
-    { period: 'Tue', totalSales: 52000, orderCount: 289, avgOrderValue: 180.28, newCustomers: 45 },
-    { period: 'Wed', totalSales: 48000, orderCount: 267, avgOrderValue: 179.78, newCustomers: 38 },
-    { period: 'Thu', totalSales: 58000, orderCount: 312, avgOrderValue: 185.90, newCustomers: 52 },
-    { period: 'Fri', totalSales: 67000, orderCount: 378, avgOrderValue: 177.25, newCustomers: 68 },
-    { period: 'Sat', totalSales: 78000, orderCount: 445, avgOrderValue: 175.28, newCustomers: 89 },
-    { period: 'Sun', totalSales: 72000, orderCount: 398, avgOrderValue: 180.90, newCustomers: 76 }
-  ]
+  // State for data from API
+  const [salesData, setSalesData] = useState<SalesData[]>([])
+  const [monthlySalesData, setMonthlySalesData] = useState<MonthlySalesData[]>([])
+  const [categoryData, setCategoryData] = useState<CategoryData[]>([])
+  const [topRestaurants, setTopRestaurants] = useState<TopRestaurant[]>([])
+  const [currentMetrics, setCurrentMetrics] = useState<SalesMetrics>({
+    totalRevenue: 0,
+    totalOrders: 0,
+    avgOrderValue: 0,
+    totalCustomers: 0,
+    growthRate: 0,
+    conversionRate: 0
+  })
+  const [hourlyData, setHourlyData] = useState<HourlyData[]>([])
 
-  const monthlySalesData = [
-    { month: 'Jan', sales: 1420000, orders: 8450, avgOrder: 168 },
-    { month: 'Feb', sales: 1380000, orders: 8200, avgOrder: 168 },
-    { month: 'Mar', sales: 1520000, orders: 9100, avgOrder: 167 },
-    { month: 'Apr', sales: 1680000, orders: 9800, avgOrder: 171 },
-    { month: 'May', sales: 1750000, orders: 10200, avgOrder: 172 },
-    { month: 'Jun', sales: 1890000, orders: 11000, avgOrder: 172 }
-  ]
+  // Fetch sales data from API
+  const fetchSalesData = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('token')
+      
+      const response = await fetch(`http://localhost:4000/api/finance/sales?period=${selectedPeriod}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
 
-  const categoryData = [
-    { name: 'Thai Food', value: 35, color: '#8B5CF6' },
-    { name: 'Japanese', value: 25, color: '#06B6D4' },
-    { name: 'Western', value: 20, color: '#10B981' },
-    { name: 'Chinese', value: 12, color: '#F59E0B' },
-    { name: 'Others', value: 8, color: '#EF4444' }
-  ]
+      if (!response.ok) {
+        throw new Error('Failed to fetch sales data')
+      }
 
-  const topRestaurants: TopRestaurant[] = [
-    {
-      id: '1',
-      name: 'Golden Thai Kitchen',
-      sales: 125000,
-      orders: 678,
-      growth: 15.2,
-      avgRating: 4.8,
-      image: '/api/placeholder/60/60'
-    },
-    {
-      id: '2', 
-      name: 'Sakura Sushi Bar',
-      sales: 98000,
-      orders: 543,
-      growth: 12.8,
-      avgRating: 4.7,
-      image: '/api/placeholder/60/60'
-    },
-    {
-      id: '3',
-      name: 'Bella Italia',
-      sales: 87000,
-      orders: 489,
-      growth: 8.5,
-      avgRating: 4.6,
-      image: '/api/placeholder/60/60'
-    },
-    {
-      id: '4',
-      name: 'Dragon Palace',
-      sales: 76000,
-      orders: 412,
-      growth: 10.3,
-      avgRating: 4.5,
-      image: '/api/placeholder/60/60'
-    },
-    {
-      id: '5',
-      name: 'Burger Junction',
-      sales: 65000,
-      orders: 398,
-      growth: 6.7,
-      avgRating: 4.4,
-      image: '/api/placeholder/60/60'
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        setCurrentMetrics(result.data.metrics)
+        setSalesData(result.data.salesData || [])
+        setHourlyData(result.data.hourlyData || [])
+        setTopRestaurants(result.data.topRestaurants || [])
+        setCategoryData(result.data.categoryData || [])
+        setMonthlySalesData(result.data.monthlySalesData || [])
+      }
+    } catch (error) {
+      console.error('Error fetching sales data:', error)
+    } finally {
+      setLoading(false)
     }
-  ]
-
-  const currentMetrics: SalesMetrics = {
-    totalRevenue: 420000,
-    totalOrders: 2334,
-    avgOrderValue: 180,
-    totalCustomers: 1876,
-    growthRate: 12.5,
-    conversionRate: 3.2
   }
 
-  const hourlyData = [
-    { hour: '6AM', orders: 12, sales: 2100 },
-    { hour: '7AM', orders: 28, sales: 4900 },
-    { hour: '8AM', orders: 45, sales: 8100 },
-    { hour: '9AM', orders: 38, sales: 6800 },
-    { hour: '10AM', orders: 32, sales: 5700 },
-    { hour: '11AM', orders: 52, sales: 9400 },
-    { hour: '12PM', orders: 89, sales: 16200 },
-    { hour: '1PM', orders: 95, sales: 17100 },
-    { hour: '2PM', orders: 67, sales: 12100 },
-    { hour: '3PM', orders: 43, sales: 7700 },
-    { hour: '4PM', orders: 38, sales: 6800 },
-    { hour: '5PM', orders: 56, sales: 10100 },
-    { hour: '6PM', orders: 87, sales: 15700 },
-    { hour: '7PM', orders: 102, sales: 18400 },
-    { hour: '8PM', orders: 98, sales: 17600 },
-    { hour: '9PM', orders: 76, sales: 13700 },
-    { hour: '10PM', orders: 54, sales: 9700 },
-    { hour: '11PM', orders: 32, sales: 5800 }
-  ]
+  useEffect(() => {
+    fetchSalesData()
+  }, [selectedPeriod])
+
+  // Export to CSV
+  const exportToCSV = () => {
+    try {
+      // UTF-8 BOM for proper Thai character encoding
+      const BOM = '\uFEFF'
+      
+      // Create CSV content
+      let csv = BOM + 'Sales Analytics Report\n'
+      csv += `Period: ${selectedPeriod}\n`
+      csv += `Generated: ${new Date().toLocaleString('th-TH')}\n\n`
+      
+      // Metrics Summary
+      csv += 'METRICS SUMMARY\n'
+      csv += 'Metric,Value\n'
+      csv += `Total Revenue,₿${currentMetrics.totalRevenue.toLocaleString()}\n`
+      csv += `Total Orders,${currentMetrics.totalOrders}\n`
+      csv += `Average Order Value,₿${currentMetrics.avgOrderValue.toLocaleString()}\n`
+      csv += `Total Customers,${currentMetrics.totalCustomers}\n`
+      csv += `Growth Rate,${currentMetrics.growthRate}%\n`
+      csv += `Conversion Rate,${currentMetrics.conversionRate}%\n\n`
+      
+      // Sales Data
+      csv += 'SALES DATA\n'
+      csv += 'Period,Total Sales,Orders,Avg Order Value,New Customers\n'
+      salesData.forEach(item => {
+        csv += `${item.period},₿${item.totalSales},${item.orderCount},₿${item.avgOrderValue},${item.newCustomers}\n`
+      })
+      csv += '\n'
+      
+      // Top Restaurants
+      csv += 'TOP RESTAURANTS\n'
+      csv += 'Rank,Name,Sales,Orders,Growth,Rating\n'
+      topRestaurants.forEach((restaurant, index) => {
+        csv += `${index + 1},${restaurant.name},₿${restaurant.sales.toLocaleString()},${restaurant.orders},${restaurant.growth}%,${restaurant.avgRating}\n`
+      })
+      csv += '\n'
+      
+      // Category Data
+      csv += 'CATEGORY PERFORMANCE\n'
+      csv += 'Category,Share %\n'
+      categoryData.forEach(category => {
+        csv += `${category.name},${category.value}%\n`
+      })
+      
+      // Create and download
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `sales-analytics-${selectedPeriod}-${Date.now()}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Cleanup
+      setTimeout(() => URL.revokeObjectURL(url), 100)
+    } catch (error) {
+      console.error('Error exporting to CSV:', error)
+      alert('เกิดข้อผิดพลาดในการส่งออกข้อมูล')
+    }
+  }
+
+  // Export to JSON
+  const exportToJSON = () => {
+    try {
+      const jsonData = {
+        reportInfo: {
+          title: 'Sales Analytics Report',
+          period: selectedPeriod,
+          generatedAt: new Date().toISOString(),
+          generatedBy: 'Finance Team'
+        },
+        metrics: currentMetrics,
+        salesData,
+        hourlyData,
+        topRestaurants,
+        categoryData,
+        monthlySalesData
+      }
+      
+      const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `sales-analytics-${selectedPeriod}-${Date.now()}.json`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Cleanup
+      setTimeout(() => URL.revokeObjectURL(url), 100)
+    } catch (error) {
+      console.error('Error exporting to JSON:', error)
+      alert('เกิดข้อผิดพลาดในการส่งออกข้อมูล')
+    }
+  }
+
+  // Print Report
+  const printReport = () => {
+    window.print()
+  }
+
+  // Filter restaurants based on search and category
+  const filteredRestaurants = topRestaurants.filter(restaurant => {
+    const matchesSearch = restaurant.name.toLowerCase().includes(searchTerm.toLowerCase())
+    // Category filtering would need category data from backend
+    return matchesSearch
+  })
 
   return (
     <DashboardLayout>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Sales Analytics</h1>
-            <p className="text-muted-foreground">
+        <div className="flex flex-col sm:flex-row lg:flex-row justify-between items-start sm:items-center lg:items-center gap-3 sm:gap-4">
+          <div className="w-full sm:w-auto">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Sales Analytics</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Track sales performance, revenue trends, and customer insights
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-full sm:w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -181,105 +266,123 @@ export default function FinanceSalesPage() {
                 <SelectItem value="1year">1 Year</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                  <Download className="w-4 h-4 mr-2" />
+                  <span className="sm:inline">Export</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportToCSV}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportToJSON}>
+                  <FileJson className="w-4 h-4 mr-2" />
+                  Export as JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={printReport}>
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print Report
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold">₿{currentMetrics.totalRevenue.toLocaleString()}</p>
-                <div className="flex items-center text-sm text-green-600 mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +{currentMetrics.growthRate}%
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">Total Revenue</p>
+                <p className="text-xl sm:text-2xl font-bold truncate">₿{currentMetrics.totalRevenue.toLocaleString()}</p>
+                <div className="flex items-center text-xs sm:text-sm text-green-600 mt-1">
+                  <TrendingUp className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">+{currentMetrics.growthRate}%</span>
                 </div>
               </div>
-              <DollarSign className="w-8 h-8 text-green-600" />
+              <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-green-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Orders</p>
-                <p className="text-2xl font-bold">{currentMetrics.totalOrders.toLocaleString()}</p>
-                <div className="flex items-center text-sm text-green-600 mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +8.2%
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">Total Orders</p>
+                <p className="text-xl sm:text-2xl font-bold truncate">{currentMetrics.totalOrders.toLocaleString()}</p>
+                <div className="flex items-center text-xs sm:text-sm text-green-600 mt-1">
+                  <TrendingUp className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">+8.2%</span>
                 </div>
               </div>
-              <ShoppingCart className="w-8 h-8 text-blue-600" />
+              <ShoppingCart className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Order Value</p>
-                <p className="text-2xl font-bold">₿{currentMetrics.avgOrderValue}</p>
-                <div className="flex items-center text-sm text-green-600 mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +3.1%
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">Avg Order Value</p>
+                <p className="text-xl sm:text-2xl font-bold truncate">₿{currentMetrics.avgOrderValue}</p>
+                <div className="flex items-center text-xs sm:text-sm text-green-600 mt-1">
+                  <TrendingUp className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">+3.1%</span>
                 </div>
               </div>
-              <Target className="w-8 h-8 text-purple-600" />
+              <Target className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Customers</p>
-                <p className="text-2xl font-bold">{currentMetrics.totalCustomers.toLocaleString()}</p>
-                <div className="flex items-center text-sm text-green-600 mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +15.3%
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">Customers</p>
+                <p className="text-xl sm:text-2xl font-bold truncate">{currentMetrics.totalCustomers.toLocaleString()}</p>
+                <div className="flex items-center text-xs sm:text-sm text-green-600 mt-1">
+                  <TrendingUp className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">+15.3%</span>
                 </div>
               </div>
-              <Users className="w-8 h-8 text-orange-600" />
+              <Users className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Conversion Rate</p>
-                <p className="text-2xl font-bold">{currentMetrics.conversionRate}%</p>
-                <div className="flex items-center text-sm text-green-600 mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +0.5%
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">Conversion Rate</p>
+                <p className="text-xl sm:text-2xl font-bold truncate">{currentMetrics.conversionRate}%</p>
+                <div className="flex items-center text-xs sm:text-sm text-green-600 mt-1">
+                  <TrendingUp className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">+0.5%</span>
                 </div>
               </div>
-              <Activity className="w-8 h-8 text-pink-600" />
+              <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-pink-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Growth Rate</p>
-                <p className="text-2xl font-bold">{currentMetrics.growthRate}%</p>
-                <div className="flex items-center text-sm text-green-600 mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +2.1%
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">Growth Rate</p>
+                <p className="text-xl sm:text-2xl font-bold truncate">{currentMetrics.growthRate}%</p>
+                <div className="flex items-center text-xs sm:text-sm text-green-600 mt-1">
+                  <TrendingUp className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">+2.1%</span>
                 </div>
               </div>
-              <Award className="w-8 h-8 text-green-600" />
+              <Award className="w-6 h-6 sm:w-8 sm:h-8 text-green-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
@@ -302,15 +405,25 @@ export default function FinanceSalesPage() {
                 <CardTitle>Daily Sales Performance</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`₿${value.toLocaleString()}`, 'Sales']} />
-                    <Area type="monotone" dataKey="totalSales" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.1} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {loading ? (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                ) : salesData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    ไม่มีข้อมูล
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={salesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="period" />
+                      <YAxis />
+                      <Tooltip formatter={(value) => [`₿${value.toLocaleString()}`, 'Sales']} />
+                      <Area type="monotone" dataKey="totalSales" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.1} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
 
@@ -319,17 +432,26 @@ export default function FinanceSalesPage() {
                 <CardTitle>Orders vs Average Order Value</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
-                    <Tooltip />
-                    <Bar yAxisId="left" dataKey="orderCount" fill="#06B6D4" name="Orders" />
-                    <Line yAxisId="right" type="monotone" dataKey="avgOrderValue" stroke="#F59E0B" name="Avg Order Value" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {loading ? (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                ) : salesData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    ไม่มีข้อมูล
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={salesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="period" />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip />
+                      <Bar yAxisId="left" dataKey="orderCount" fill="#06B6D4" name="Orders" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -343,17 +465,27 @@ export default function FinanceSalesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={hourlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="hour" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
-                  <Line yAxisId="left" type="monotone" dataKey="orders" stroke="#8B5CF6" name="Orders" strokeWidth={2} />
-                  <Line yAxisId="right" type="monotone" dataKey="sales" stroke="#10B981" name="Sales (₿)" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
+              {loading ? (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  กำลังโหลดข้อมูล...
+                </div>
+              ) : hourlyData.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  ไม่มีข้อมูล
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={hourlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="hour" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Line yAxisId="left" type="monotone" dataKey="orders" stroke="#8B5CF6" name="Orders" strokeWidth={2} />
+                    <Line yAxisId="right" type="monotone" dataKey="sales" stroke="#10B981" name="Sales (₿)" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -365,15 +497,25 @@ export default function FinanceSalesPage() {
                 <CardTitle>Monthly Revenue Trend</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={350}>
-                  <AreaChart data={monthlySalesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`₿${value.toLocaleString()}`, 'Revenue']} />
-                    <Area type="monotone" dataKey="sales" stroke="#10B981" fill="#10B981" fillOpacity={0.2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {loading ? (
+                  <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                ) : monthlySalesData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+                    ไม่มีข้อมูล
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={350}>
+                    <AreaChart data={monthlySalesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip formatter={(value) => [`₿${value.toLocaleString()}`, 'Revenue']} />
+                      <Area type="monotone" dataKey="sales" stroke="#10B981" fill="#10B981" fillOpacity={0.2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
 
@@ -382,37 +524,47 @@ export default function FinanceSalesPage() {
                 <CardTitle>New Customer Acquisition</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={350}>
-                  <BarChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="newCustomers" fill="#F59E0B" name="New Customers" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {loading ? (
+                  <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                ) : salesData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+                    ไม่มีข้อมูล
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={salesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="period" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="newCustomers" fill="#F59E0B" name="New Customers" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="restaurants" className="space-y-6">
+        <TabsContent value="restaurants" className="space-y-4 sm:space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <CardTitle>Top Performing Restaurants</CardTitle>
-                <div className="flex gap-2">
-                  <div className="relative">
+              <div className="flex flex-col gap-3 sm:gap-4">
+                <CardTitle className="text-lg sm:text-xl">Top Performing Restaurants</CardTitle>
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
+                  <div className="relative flex-1">
                     <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
                     <Input
                       placeholder="Search restaurants..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9 w-64"
+                      className="pl-9 w-full"
                     />
                   </div>
                   <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-full sm:w-32">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -426,63 +578,79 @@ export default function FinanceSalesPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {topRestaurants.map((restaurant, index) => (
-                  <div key={restaurant.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-bold">
-                        {index + 1}
+              <div className="space-y-3 sm:space-y-4">
+                {loading ? (
+                  <div className="text-center py-8 text-sm sm:text-base text-muted-foreground">กำลังโหลดข้อมูล...</div>
+                ) : filteredRestaurants.length === 0 ? (
+                  <div className="text-center py-8 text-sm sm:text-base text-muted-foreground">ไม่พบข้อมูลร้านค้า</div>
+                ) : (
+                  filteredRestaurants.map((restaurant, index) => (
+                    <div key={restaurant.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-muted/50 transition-colors gap-3 sm:gap-4">
+                      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+                        <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary text-primary-foreground font-bold text-sm sm:text-base flex-shrink-0">
+                          {index + 1}
+                        </div>
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded bg-gradient-to-br from-orange-400 to-pink-400"></div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-sm sm:text-base truncate">{restaurant.name}</h3>
+                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">★ {restaurant.avgRating}</span>
+                            <span>{restaurant.orders} orders</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                        <div className="w-8 h-8 rounded bg-gradient-to-br from-orange-400 to-pink-400"></div>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold">{restaurant.name}</h3>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>★ {restaurant.avgRating}</span>
-                          <span>{restaurant.orders} orders</span>
+                      <div className="text-left sm:text-right flex-shrink-0">
+                        <p className="font-semibold text-base sm:text-lg">₿{restaurant.sales.toLocaleString()}</p>
+                        <div className="flex items-center text-xs sm:text-sm text-green-600">
+                          <TrendingUp className="w-3 h-3 mr-1" />
+                          +{restaurant.growth}%
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold">₿{restaurant.sales.toLocaleString()}</p>
-                      <div className="flex items-center text-sm text-green-600">
-                        <TrendingUp className="w-3 h-3 mr-1" />
-                        +{restaurant.growth}%
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="categories" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <TabsContent value="categories" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <Card>
               <CardHeader>
                 <CardTitle>Sales by Category</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={120}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [`${value}%`, 'Share']} />
-                  </PieChart>
-                </ResponsiveContainer>
+                {loading ? (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                ) : categoryData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    ไม่มีข้อมูล
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={120}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => [`${value}%`, 'Share']} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
 
@@ -491,23 +659,33 @@ export default function FinanceSalesPage() {
                 <CardTitle>Category Performance</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {categoryData.map((category) => (
-                    <div key={category.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-4 h-4 rounded" 
-                          style={{ backgroundColor: category.color }}
-                        ></div>
-                        <span className="font-medium">{category.name}</span>
+                {loading ? (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                ) : categoryData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    ไม่มีข้อมูล
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {categoryData.map((category) => (
+                      <div key={category.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="w-4 h-4 rounded" 
+                            style={{ backgroundColor: category.color }}
+                          ></div>
+                          <span className="font-medium">{category.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold">{category.value}%</div>
+                          <div className="text-sm text-muted-foreground">of total sales</div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-semibold">{category.value}%</div>
-                        <div className="text-sm text-muted-foreground">of total sales</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

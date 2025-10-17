@@ -65,7 +65,7 @@ async function main() {
 
   // Create system settings
   const settings = [
-    { key: 'restaurant_name', value: 'ZeenZilla Food Court', type: 'string' },
+    { key: 'restaurant_name', value: 'FoodFlow Platform', type: 'string' },
     { key: 'restaurant_phone', value: '02-123-4567', type: 'string' },
     { key: 'restaurant_address', value: '123 ถนนรัชดาภิเษก เขตดินแดง กรุงเทพฯ 10400', type: 'string' },
     { key: 'order_preparation_time', value: '15', type: 'number' },
@@ -186,7 +186,7 @@ async function main() {
           name: 'ข้าวผัดกุ้ง',
           description: 'ข้าวผัดกุ้งสดรสเข้มข้น เสิร์ฟพร้อมผักกาดดอง',
           price: 80,
-          image: '/api/placeholder/300/200',
+          image: null,
           categoryId: mainCourse.id,
           preparationTime: 15
         },
@@ -194,7 +194,7 @@ async function main() {
           name: 'ก๋วยเตี๋ยวต้มยำ',
           description: 'ก๋วยเตี๋ยวต้มยำกุ้งรสจัดจ้าน เผ็ดร้อนตามแบบไทยแท้',
           price: 65,
-          image: '/api/placeholder/300/200',
+          image: null,
           categoryId: mainCourse.id,
           preparationTime: 20
         },
@@ -202,7 +202,7 @@ async function main() {
           name: 'ผัดไทยกุ้งสด',
           description: 'ผัดไทยกุ้งสดเส้นหมี่ รสชาติหวานเปรี้ยว',
           price: 85,
-          image: '/api/placeholder/300/200',
+          image: null,
           categoryId: mainCourse.id,
           preparationTime: 18
         }
@@ -234,7 +234,7 @@ async function main() {
           name: 'ชาไทยเย็น',
           description: 'ชาไทยเย็นหวานมัน เสิร์ฟพร้อมน้ำแข็ง',
           price: 25,
-          image: '/api/placeholder/300/200',
+          image: null,
           categoryId: drinks.id,
           preparationTime: 5
         },
@@ -242,7 +242,7 @@ async function main() {
           name: 'กาแฟดำร้อน',
           description: 'กาแฟคั่วใหม่ รสชาติเข้มข้น',
           price: 30,
-          image: '/api/placeholder/300/200',
+          image: null,
           categoryId: drinks.id,
           preparationTime: 8
         }

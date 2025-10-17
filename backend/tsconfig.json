@@ -30,7 +30,7 @@
     // "rootDir": "./",                                  /* Specify the root folder within your source files. */
   // Use modern Node-style ESM/CJS dual resolution to avoid edge cases with ESM packages under Bun
   "moduleResolution": "nodenext",                       /* Updated from 'node' to support modern ESM resolution. */
-    // "ignoreDeprecations": "5.0",                      /* Silence deprecation errors for options deprecated in TypeScript 5.0. */
+    "ignoreDeprecations": "6.0",                        /* Silence deprecation errors for options deprecated in TypeScript 6.0. */
     // "baseUrl": "./",                                  /* Specify the base directory to resolve non-relative module names. */
     // "paths": {},                                      /* Specify a set of entries that re-map imports to additional lookup locations. */
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */

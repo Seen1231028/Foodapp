@@ -89,8 +89,6 @@ export const menuRoutes = new Elysia({ prefix: "/menus" })
         where.isAvailable = available === 'true';
       }
 
-      console.log('🔍 Query where condition:', JSON.stringify(where, null, 2))
-
       const menus = await prisma.menu.findMany({
         where,
         include: {
@@ -99,12 +97,17 @@ export const menuRoutes = new Elysia({ prefix: "/menus" })
               id: true,
               name: true
             }
+          },
+          shop: {
+            select: {
+              id: true,
+              name: true,
+              image: true
+            }
           }
         },
         orderBy: { createdAt: 'desc' }
       });
-
-      console.log(`✅ Found ${menus.length} menus`)
 
       return {
         success: true,
@@ -346,6 +349,44 @@ export const menuRoutes = new Elysia({ prefix: "/menus" })
       }
     } catch (error) {
       console.error("Toggle menu availability error:", error);
+      set.status = 500;
+      return { error: "เกิดข้อผิดพลาดในการเปลี่ยนสถานะเมนู" };
+    }
+  })
+  
+  // PATCH /menus/:id/active - Toggle active/inactive status (admin)
+  .patch("/:id/active", async ({ params, body, set }: any) => {
+    try {
+      const id = parseInt(params.id);
+      const { isActive } = body as { isActive: boolean };
+
+      const existingMenu = await prisma.menu.findUnique({ where: { id } });
+
+      if (!existingMenu) {
+        set.status = 404;
+        return { error: "ไม่พบเมนูที่ระบุ" };
+      }
+
+      const updatedMenu = await prisma.menu.update({
+        where: { id },
+        data: { isActive },
+        include: {
+          category: {
+            select: { id: true, name: true }
+          },
+          shop: {
+            select: { id: true, name: true }
+          }
+        }
+      });
+
+      return {
+        success: true,
+        data: updatedMenu,
+        message: `${isActive ? 'เปิด' : 'ปิด'}ใช้งานเมนูสำเร็จ`
+      };
+    } catch (error) {
+      console.error("Toggle menu active error:", error);
       set.status = 500;
       return { error: "เกิดข้อผิดพลาดในการเปลี่ยนสถานะเมนู" };
     }

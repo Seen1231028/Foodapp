@@ -149,6 +149,28 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?     // null ถ้าเป็น system action
+  username    String?  // เก็บ username ไว้สำหรับการแสดงผล
+  userRole    String?  // admin, shop_owner, customer, finance
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, APPROVE, REJECT, etc.
+  entity      String   // User, Order, Menu, Payment, Shop, etc.
+  entityId    Int?     // ID ของ entity ที่ถูกกระทำ
+  description String   // คำอธิบายการกระทำ เช่น "สร้างออเดอร์ #123"
+  metadata    String?  @db.Text // JSON string เก็บข้อมูลเพิ่มเติม
+  ipAddress   String?  // IP Address ของผู้ใช้
+  userAgent   String?  @db.Text // Browser/Device info
+  status      String   @default("SUCCESS") // SUCCESS, FAILED, WARNING
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
 // Enums
 enum OrderStatus {
   PENDING       // รอการยืนยัน

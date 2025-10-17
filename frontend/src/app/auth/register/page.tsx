@@ -68,8 +68,10 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center p-4 relative">
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">ZeenZilla</h1>
-          <p className="text-muted-foreground">ระบบสั่งอาหารออนไลน์</p>
+          <h1 className="text-5xl font-extrabold mb-3 bg-gradient-to-r from-orange-500 via-red-500 to-pink-600 bg-clip-text text-transparent">
+            FoodFlow
+          </h1>
+          <p className="text-muted-foreground text-lg">สมัครสมาชิกเพื่อเริ่มสั่งอาหาร 🍕</p>
         </div>
 
         <Card>

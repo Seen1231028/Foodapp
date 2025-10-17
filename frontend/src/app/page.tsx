@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MenuCard } from "@/components/MenuCard";
+import { CartButton } from "@/components/CartButton";
 import LiquidEther from "@/components/LiquidEther";
 import '@/utils/cleanup'; // Auto-cleanup localStorage
 import { 
@@ -23,6 +25,7 @@ import {
   User
 } from "lucide-react";
 import Link from "next/link";
+import type { MenuItem } from "@/utils/menuApi";
 
 // Menu item shape adapted for homepage from DB menus
 interface MenuItemDisplay {
@@ -91,7 +94,7 @@ function HomePage({ userRole }: { userRole: string }) {
             name: m.name,
             description: m.description || null,
             price: m.price,
-            image: m.image || '/api/placeholder/300/200',
+            image: m.image || null,
             category: m.category?.name || 'อื่นๆ',
             isAvailable: m.isAvailable,
             preparationTime: m.preparationTime ? `${m.preparationTime} นาที` : '15 นาที',
@@ -193,8 +196,10 @@ function HomePage({ userRole }: { userRole: string }) {
       <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">ยินดีต้อนรับสู่ ZeenZilla</h1>
-          <p className="text-muted-foreground">สั่งอาหารอร่อยจากร้านดังใกล้บ้านคุณ</p>
+          <h1 className="text-3xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 bg-clip-text text-black">
+            ยินดีต้อนรับสู่ FoodFlow
+          </h1>
+          <p className="text-lg text-muted-foreground">สั่งอาหารอร่อยจากร้านดังใกล้บ้านคุณ รวดเร็วทันใจ 🚀</p>
           {selectedRestaurant && (
             <div className="mt-4">
               <Button variant="outline" size="sm" onClick={clearRestaurantFilter}>
@@ -288,60 +293,32 @@ function HomePage({ userRole }: { userRole: string }) {
             <div>
               <h2 className="text-xl font-semibold mb-4">เมนูอาหาร</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredMenuItems.map((item) => (
-                  <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                    <div className="aspect-video bg-muted">
-                      <div className="w-full h-full bg-gradient-to-br from-green-400 to-blue-400 flex items-center justify-center">
-                        <Package className="w-12 h-12 text-white" />
-                      </div>
-                    </div>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-semibold">{item.name}</h3>
-                        <div className="flex items-center text-sm text-yellow-600">
-                          <Star className="w-4 h-4 fill-current mr-1" />
-                          {item.rating}
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">{item.description}</p>
-                      
-                      <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
-                        <div className="flex items-center">
-                          <Clock className="w-4 h-4 mr-1" />
-                          {item.preparationTime}
-                        </div>
-                        <span className="text-sm">({item.reviewCount} รีวิว)</span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-bold text-primary">฿{item.price}</span>
-                        <div className="flex items-center gap-2">
-                          {getCartItemCount(item.id) > 0 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeFromCart(item.id)}
-                            >
-                              <Minus className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {getCartItemCount(item.id) > 0 && (
-                            <span className="mx-2 font-semibold">{getCartItemCount(item.id)}</span>
-                          )}
-                          <Button
-                            size="sm"
-                            onClick={() => addToCart(item.id)}
-                            disabled={!item.isAvailable}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                {filteredMenuItems.map((item) => {
+                  // แปลง MenuItemDisplay เป็น MenuItem สำหรับ MenuCard
+                  const menuItem: MenuItem = {
+                    id: item.id,
+                    name: item.name,
+                    description: item.description,
+                    price: item.price,
+                    image: item.image || null,
+                    isAvailable: item.isAvailable,
+                    isActive: true,
+                    preparationTime: parseInt(item.preparationTime) || 15,
+                    categoryId: 0, // placeholder
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    category: {
+                      id: 0,
+                      name: item.category
+                    }
+                  };
+                  return <MenuCard key={item.id} menu={menuItem} />;
+                })}
               </div>
             </div>
+
+            {/* Floating Cart Button */}
+            <CartButton />
           </div>
 
           {/* Cart Modal */}
@@ -488,12 +465,12 @@ export default function Home() {
           {/* Content with overlay */}
           <div className="max-w-md w-full space-y-8 p-8 relative z-10">
             <div className="text-center">
-              <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3 bg-clip-text text-transparent bg-gradient-to-br from-black via-black to-black/80 drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]">
-                ZeenZilla
+              <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-br from-orange-400 via-red-500 to-pink-600 drop-shadow-[0_4px_12px_rgba(251,146,60,0.5)]">
+                FoodFlow
               </h1>
-              <p className="relative inline-block text-base md:text-lg font-medium text-black/90 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm shadow-sm border border-white/15">
-                <span className="relative z-10">ระบบสั่งอาหารออนไลน์</span>
-                <span className="absolute inset-0 rounded-full bg-gradient-to-r from-white/20 via-white/10 to-transparent opacity-70" />
+              <p className="relative inline-block text-base md:text-lg font-medium text-black/90 px-5 py-2.5 rounded-full bg-white/20 backdrop-blur-md shadow-lg border border-white/30">
+                <span className="relative z-10 bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent font-semibold">ส่งอาหารรวดเร็วทันใจ</span>
+                <span className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-200/30 via-red-200/20 to-pink-200/30 opacity-70" />
               </p>
             </div>
             

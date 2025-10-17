@@ -1,15 +1,94 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
   FileBarChart, CreditCard, TrendingUp, DollarSign, 
-  ShoppingCart, Users, Calendar, ArrowRight
+  ShoppingCart, Users, Calendar, ArrowRight, Loader2
 } from 'lucide-react'
 import Link from 'next/link'
 
+interface FinanceData {
+  todaySales: string;
+  salesChange: string;
+  todayOrders: number;
+  ordersChange: string;
+  newCustomers: number;
+  customersChange: string;
+  monthlySales: string;
+  monthlyGrowth: string;
+  pendingPayments: number;
+  topShopName: string;
+}
+
 export default function FinancePage() {
+  const [data, setData] = useState<FinanceData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchFinanceData();
+  }, []);
+
+  const fetchFinanceData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('กรุณาเข้าสู่ระบบ');
+        return;
+      }
+
+      const response = await fetch('http://localhost:4000/api/finance/dashboard', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setData(result.data.overview);
+      } else {
+        setError(result.error || 'ไม่สามารถดึงข้อมูลได้');
+      }
+    } catch (error) {
+      console.error('Fetch finance error:', error);
+      setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-lg">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-6">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 p-4 rounded-lg">
+          ไม่พบข้อมูล
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -32,8 +111,10 @@ export default function FinancePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">ยอดขายรวมวันนี้</p>
-                <p className="text-2xl font-bold">₿75,420</p>
-                <p className="text-xs text-green-600">+12.5% จากเมื่อวาน</p>
+                <p className="text-2xl font-bold">฿{parseFloat(data.todaySales).toLocaleString('th-TH', {minimumFractionDigits: 2})}</p>
+                <p className={`text-xs ${parseFloat(data.salesChange) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {parseFloat(data.salesChange) >= 0 ? '+' : ''}{data.salesChange}% จากเมื่อวาน
+                </p>
               </div>
               <DollarSign className="w-8 h-8 text-green-600" />
             </div>
@@ -45,8 +126,10 @@ export default function FinancePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">คำสั่งซื้อวันนี้</p>
-                <p className="text-2xl font-bold">1,245</p>
-                <p className="text-xs text-green-600">+8.2% จากเมื่อวาน</p>
+                <p className="text-2xl font-bold">{data.todayOrders.toLocaleString()}</p>
+                <p className={`text-xs ${parseFloat(data.ordersChange) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {parseFloat(data.ordersChange) >= 0 ? '+' : ''}{data.ordersChange}% จากเมื่อวาน
+                </p>
               </div>
               <ShoppingCart className="w-8 h-8 text-blue-600" />
             </div>
@@ -58,8 +141,10 @@ export default function FinancePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">ลูกค้าใหม่วันนี้</p>
-                <p className="text-2xl font-bold">89</p>
-                <p className="text-xs text-green-600">+15.3% จากเมื่อวาน</p>
+                <p className="text-2xl font-bold">{data.newCustomers}</p>
+                <p className={`text-xs ${parseFloat(data.customersChange) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {parseFloat(data.customersChange) >= 0 ? '+' : ''}{data.customersChange}% จากเมื่อวาน
+                </p>
               </div>
               <Users className="w-8 h-8 text-purple-600" />
             </div>
@@ -71,7 +156,7 @@ export default function FinancePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">อัตราการเติบโต</p>
-                <p className="text-2xl font-bold">12.5%</p>
+                <p className="text-2xl font-bold">{data.monthlyGrowth}%</p>
                 <p className="text-xs text-green-600">เดือนนี้</p>
               </div>
               <TrendingUp className="w-8 h-8 text-orange-600" />
@@ -99,15 +184,17 @@ export default function FinancePage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>รายงานรายได้รายเดือน</span>
-                <span className="text-green-600">₿1.2M</span>
+                <span className="text-green-600">฿{parseFloat(data.monthlySales).toLocaleString('th-TH', {minimumFractionDigits: 2})}</span>
               </div>
               <div className="flex justify-between">
                 <span>การเติบโตของรายได้</span>
-                <span className="text-green-600">+15.2%</span>
+                <span className={parseFloat(data.monthlyGrowth) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  {parseFloat(data.monthlyGrowth) >= 0 ? '+' : ''}{data.monthlyGrowth}%
+                </span>
               </div>
               <div className="flex justify-between">
-                <span>ร้านค้าที่มีผลงานดี</span>
-                <span className="text-blue-600">25 ร้าน</span>
+                <span>ร้านค้าที่ขายดีที่สุด</span>
+                <span className="text-blue-600">{data.topShopName}</span>
               </div>
             </div>
             <Link href="/finance/reports" className="block">
@@ -136,15 +223,15 @@ export default function FinancePage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>รอการอนุมัติ</span>
-                <span className="text-orange-600">12 รายการ</span>
+                <span className="text-orange-600">{data.pendingPayments} รายการ</span>
               </div>
               <div className="flex justify-between">
                 <span>สำเร็จแล้ววันนี้</span>
-                <span className="text-green-600">₿45,200</span>
+                <span className="text-green-600">฿{parseFloat(data.todaySales).toLocaleString('th-TH', {minimumFractionDigits: 2})}</span>
               </div>
               <div className="flex justify-between">
-                <span>บัญชีธนาคารที่เชื่อมต่อ</span>
-                <span className="text-blue-600">8 บัญชี</span>
+                <span>คำสั่งซื้อวันนี้</span>
+                <span className="text-blue-600">{data.todayOrders} รายการ</span>
               </div>
             </div>
             <Link href="/finance/payments" className="block">
@@ -173,15 +260,17 @@ export default function FinancePage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>ยอดขายรวมเดือนนี้</span>
-                <span className="text-green-600">₿1.89M</span>
+                <span className="text-green-600">฿{parseFloat(data.monthlySales).toLocaleString('th-TH', {minimumFractionDigits: 2})}</span>
               </div>
               <div className="flex justify-between">
                 <span>ร้านที่ขายดีที่สุด</span>
-                <span className="text-blue-600">Golden Thai</span>
+                <span className="text-blue-600">{data.topShopName}</span>
               </div>
               <div className="flex justify-between">
-                <span>เวลาขายดีสุด</span>
-                <span className="text-purple-600">12-14 น.</span>
+                <span>การเติบโต</span>
+                <span className={parseFloat(data.monthlyGrowth) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  {parseFloat(data.monthlyGrowth) >= 0 ? '+' : ''}{data.monthlyGrowth}%
+                </span>
               </div>
             </div>
             <Link href="/finance/sales" className="block">

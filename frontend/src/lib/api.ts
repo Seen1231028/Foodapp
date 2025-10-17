@@ -146,8 +146,17 @@ class ApiService {
   }
 
   async logout(): Promise<void> {
-    this.clearToken()
-    this.clearUser()
+    try {
+      // Call backend logout endpoint to log the activity
+      await this.api.post('/auth/logout')
+    } catch (error) {
+      // Even if backend call fails, still logout on frontend
+      console.error('Logout API error:', error)
+    } finally {
+      // Always clear local data
+      this.clearToken()
+      this.clearUser()
+    }
   }
 
   async forgotPassword(data: { email: string }): Promise<{ message: string }> {

@@ -113,7 +113,7 @@ export const orderRoutes = new Elysia({ prefix: "/orders" })
       set.status = 200;
       return {
         success: true,
-        data: formattedOrders,
+        orders: formattedOrders,
         total: formattedOrders.length
       };
 
@@ -123,6 +123,99 @@ export const orderRoutes = new Elysia({ prefix: "/orders" })
       return { 
         success: false, 
         error: "เกิดข้อผิดพลาดในการดึงข้อมูลคำสั่งซื้อ" 
+      };
+    }
+  })
+
+  // สร้างคำสั่งซื้อใหม่
+  .post("/", async ({ headers, set, body }) => {
+    try {
+      // ตรวจสอบ authentication
+      const token = headers.authorization?.replace('Bearer ', '');
+      if (!token) {
+        set.status = 401;
+        return { success: false, error: 'ไม่พบ token การยืนยันตัวตน' };
+      }
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+      if (!decoded) {
+        set.status = 403;
+        return { success: false, error: 'Token ไม่ถูกต้อง' };
+      }
+
+      // ตรวจสอบข้อมูลที่ส่งมา
+      const orderData = body as any;
+      if (!orderData.items || !Array.isArray(orderData.items) || orderData.items.length === 0) {
+        set.status = 400;
+        return { success: false, error: 'กรุณาเลือกสินค้าอย่างน้อย 1 รายการ' };
+      }
+
+      if (!orderData.paymentMethod) {
+        set.status = 400;
+        return { success: false, error: 'กรุณาเลือกวิธีชำระเงิน' };
+      }
+
+      // คำนวณยอดรวม
+      const totalAmount = orderData.items.reduce((sum: number, item: any) => {
+        return sum + (item.price * item.quantity);
+      }, 0);
+
+      // สร้าง order number
+      const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      // สร้าง order ใหม่
+      const order = await prisma.order.create({
+        data: {
+          orderNumber,
+          userId: decoded.userId,
+          status: 'PENDING',
+          totalAmount,
+          notes: orderData.notes || null,
+          items: {
+            create: orderData.items.map((item: any) => ({
+              menuId: item.menuId,
+              quantity: item.quantity,
+              price: item.price,
+              notes: item.notes || null
+            }))
+          },
+          payments: {
+            create: {
+              amount: totalAmount,
+              method: orderData.paymentMethod,
+              status: 'PENDING'
+            }
+          }
+        },
+        include: {
+          items: {
+            include: {
+              menu: true
+            }
+          },
+          payments: true
+        }
+      });
+
+      set.status = 201;
+      return {
+        success: true,
+        message: 'สร้างคำสั่งซื้อสำเร็จ',
+        order: {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          total: Number(order.totalAmount),
+          createdAt: order.createdAt.toISOString()
+        }
+      };
+
+    } catch (error) {
+      console.error("Create order error:", error);
+      set.status = 500;
+      return {
+        success: false,
+        error: "เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ"
       };
     }
   })

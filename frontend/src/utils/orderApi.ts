@@ -40,13 +40,19 @@ export const getOrders = async (status?: string) => {
   try {
     const token = authUtils.getToken();
     if (!token) {
-      throw new Error('ไม่พบ token');
+      return { 
+        success: false, 
+        error: 'กรุณาเข้าสู่ระบบก่อนดูคำสั่งซื้อ',
+        orders: []
+      };
     }
 
     let url = `${API_BASE_URL}/orders`;
     if (status && status !== 'all') {
       url += `?status=${status}`;
     }
+
+    console.log('Fetching orders from:', url);
 
     const response = await fetch(url, {
       method: 'GET',
@@ -56,15 +62,28 @@ export const getOrders = async (status?: string) => {
       },
     });
 
+    console.log('Response status:', response.status);
+
     if (!response.ok) {
-      throw new Error('Failed to fetch orders');
+      const errorText = await response.text();
+      console.error('Response error:', errorText);
+      return { 
+        success: false, 
+        error: `ไม่สามารถดึงข้อมูลได้ (${response.status})`,
+        orders: []
+      };
     }
 
     const result = await response.json();
+    console.log('Orders result:', result);
     return result;
   } catch (error) {
     console.error('Error fetching orders:', error);
-    throw error;
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูล',
+      orders: []
+    };
   }
 };
 
@@ -188,4 +207,51 @@ export const getTimeAgo = (dateString: string): string => {
 // ฟังก์ชันช่วยในการฟอร์แมทเงิน
 export const formatCurrency = (amount: number): string => {
   return `฿${amount.toLocaleString()}`;
+};
+
+// สร้างคำสั่งซื้อใหม่
+export const createOrder = async (orderData: {
+  items: Array<{
+    menuId: number;
+    quantity: number;
+    price: number;
+    notes?: string;
+  }>;
+  notes?: string;
+  paymentMethod: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'BANK_TRANSFER' | 'WALLET';
+}) => {
+  try {
+    const token = authUtils.getToken();
+    if (!token) {
+      return {
+        success: false,
+        error: 'กรุณาเข้าสู่ระบบก่อนสั่งซื้อ'
+      };
+    }
+
+    const response = await fetch(`${API_BASE_URL}/orders`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(orderData)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      return {
+        success: false,
+        error: errorData.error || 'ไม่สามารถสร้างคำสั่งซื้อได้'
+      };
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ'
+    };
+  }
 };

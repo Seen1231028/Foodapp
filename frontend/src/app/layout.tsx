@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ZeenZilla Food App",
-  description: "ระบบสั่งอาหารออนไลน์ของ ZeenZilla",
+  title: "FoodFlow - Food Delivery Platform",
+  description: "ระบบสั่งอาหารออนไลน์ที่รวดเร็วและสะดวกสบาย",
 };
 
 export default function RootLayout({
