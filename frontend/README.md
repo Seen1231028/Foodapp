@@ -5,20 +5,40 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, run the development server:
 
 ```bash
+bun run dev
+# or
 npm run dev
 # or
 yarn dev
 # or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Running with Docker & Bun
+
+```bash
+# build (ensure docker daemon is running)
+docker compose build frontend
+# start all services (frontend, backend, db)
+docker compose up
+```
+
+Hot reload is enabled via bind mounts for `src` and `public`.
+
+## Bun Compatibility Polyfill
+
+Running Next.js on Bun 1.1.x currently lacks `TextEncoderStream` / `TextDecoderStream` globals used by Next.js edge runtime internals.
+We provide a lightweight shim in `src/polyfills/streams.ts` that:
+
+- Injects before the Next.js app entry via a custom `webpack` entry modification in `next.config.ts`.
+- Defines `TextEncoderStream` & `TextDecoderStream` using `TransformStream` + the existing `TextEncoder` / `TextDecoder`.
+- Uses `web-streams-polyfill` for a consistent streams base in Bun.
+
+If Bun adds native support later, remove the shim file and the `webpack` entry override.
 
 ## Learn More
 

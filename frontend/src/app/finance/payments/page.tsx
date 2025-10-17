@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Loader2 } from "lucide-react";
 import { 
   Search,
   Filter,
@@ -25,193 +35,447 @@ import {
   Phone,
   Mail,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  FileText,
+  FileJson,
+  Printer
 } from "lucide-react";
 
 interface Payment {
   id: number;
   transactionId: string;
-  restaurantId: number;
+  orderId?: number;
+  orderNumber?: string;
+  restaurantId?: number;
   restaurantName: string;
-  restaurantImage: string;
+  restaurantImage?: string;
   amount: number;
   commission: number;
   netAmount: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
-  paymentMethod: 'credit_card' | 'bank_transfer' | 'promptpay' | 'cash';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'paid';
+  paymentMethod: 'credit_card' | 'bank_transfer' | 'promptpay' | 'cash' | 'debit_card' | 'wallet';
   orderDate: string;
   paymentDate?: string;
   settlementDate?: string;
   customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
   notes?: string;
-  type: 'payment' | 'refund' | 'adjustment';
+  type?: 'payment' | 'refund' | 'adjustment';
 }
 
 interface PaymentSummary {
   totalPending: number;
-  totalProcessing: number;
   totalCompleted: number;
   totalFailed: number;
   totalRefunded: number;
   pendingCount: number;
-  processingCount: number;
   completedCount: number;
   failedCount: number;
   refundedCount: number;
 }
 
-interface BankAccount {
-  id: number;
-  restaurantId: number;
-  restaurantName: string;
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  isVerified: boolean;
-  isDefault: boolean;
+interface PaymentData {
+  payments: Payment[];
+  summary: PaymentSummary;
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
 }
 
 export default function FinancePaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(null);
+  const [data, setData] = useState<PaymentData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data - ในการใช้งานจริงจะดึงจาก API
-  const payments: Payment[] = [
-    {
-      id: 1,
-      transactionId: "TXN-20240915-001",
-      restaurantId: 1,
-      restaurantName: "ร้านอาหารไทยแท้",
-      restaurantImage: "/restaurant1.jpg",
-      amount: 580,
-      commission: 29,
-      netAmount: 551,
-      status: "pending",
-      paymentMethod: "credit_card",
-      orderDate: "2024-09-15T14:30:00",
-      customerName: "สมศรี ใจดี",
-      type: "payment"
-    },
-    {
-      id: 2,
-      transactionId: "TXN-20240915-002",
-      restaurantId: 2,
-      restaurantName: "ก๋วยเตี๋ยวลุงสมชาย",
-      restaurantImage: "/restaurant2.jpg",
-      amount: 120,
-      commission: 6,
-      netAmount: 114,
-      status: "completed",
-      paymentMethod: "promptpay",
-      orderDate: "2024-09-15T12:15:00",
-      paymentDate: "2024-09-15T12:20:00",
-      settlementDate: "2024-09-15T18:00:00",
-      customerName: "วิชาญ ชาญณรงค์",
-      type: "payment"
-    },
-    {
-      id: 3,
-      transactionId: "TXN-20240914-003",
-      restaurantId: 3,
-      restaurantName: "KFC สาขาเซ็นทรัล",
-      restaurantImage: "/restaurant3.jpg",
-      amount: 299,
-      commission: 15,
-      netAmount: 284,
-      status: "failed",
-      paymentMethod: "credit_card",
-      orderDate: "2024-09-14T19:00:00",
-      customerName: "นิรันดร์ สุขใจ",
-      notes: "บัตรเครดิตหมดอายุ",
-      type: "payment"
-    },
-    {
-      id: 4,
-      transactionId: "REF-20240914-001",
-      restaurantId: 1,
-      restaurantName: "ร้านอาหารไทยแท้",
-      restaurantImage: "/restaurant1.jpg",
-      amount: -150,
-      commission: -7.5,
-      netAmount: -142.5,
-      status: "completed",
-      paymentMethod: "credit_card",
-      orderDate: "2024-09-14T16:20:00",
-      paymentDate: "2024-09-14T17:00:00",
-      customerName: "มานิตย์ เจริญผล",
-      notes: "ยกเลิกออเดอร์ภายใน 15 นาที",
-      type: "refund"
-    },
-    {
-      id: 5,
-      transactionId: "TXN-20240914-004",
-      restaurantId: 4,
-      restaurantName: "สเต็กบ้านป้าน้อย",
-      restaurantImage: "/restaurant4.jpg",
-      amount: 850,
-      commission: 42.5,
-      netAmount: 807.5,
-      status: "processing",
-      paymentMethod: "bank_transfer",
-      orderDate: "2024-09-14T20:30:00",
-      paymentDate: "2024-09-15T09:00:00",
-      customerName: "ธนาคาร กสิกรไทย",
-      type: "payment"
+  const fetchPayments = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('กรุณาเข้าสู่ระบบ');
+        return;
+      }
+
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') {
+        // Map frontend status to backend status
+        let backendStatus = statusFilter;
+        if (statusFilter === 'completed' || statusFilter === 'processing') {
+          backendStatus = 'PAID';
+        } else {
+          backendStatus = statusFilter.toUpperCase();
+        }
+        params.append('status', backendStatus);
+      }
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+
+      console.log('Fetching payments with params:', params.toString());
+
+      const response = await fetch(
+        `http://localhost:4000/api/finance/payments?${params.toString()}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('ไม่สามารถดึงข้อมูลการชำระเงินได้');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setData(result.data);
+      } else {
+        setError(result.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการดึงข้อมูล');
+      console.error('Error fetching payments:', err);
+    } finally {
+      setLoading(false);
     }
-  ];
-
-  const summary: PaymentSummary = {
-    totalPending: 25000,
-    totalProcessing: 35000,
-    totalCompleted: 2825000,
-    totalFailed: 8500,
-    totalRefunded: 15000,
-    pendingCount: 45,
-    processingCount: 28,
-    completedCount: 1520,
-    failedCount: 12,
-    refundedCount: 35
   };
 
-  const bankAccounts: BankAccount[] = [
-    {
-      id: 1,
-      restaurantId: 1,
-      restaurantName: "ร้านอาหารไทยแท้",
-      bankName: "ธนาคารกสิกรไทย",
-      accountNumber: "xxx-x-x0123-x",
-      accountName: "บริษัท อาหารไทยแท้ จำกัด",
-      isVerified: true,
-      isDefault: true
-    },
-    {
-      id: 2,
-      restaurantId: 2,
-      restaurantName: "ก๋วยเตี๋ยวลุงสมชาย",
-      bankName: "ธนาคารไทยพาณิชย์",
-      accountNumber: "xxx-x-x5678-x",
-      accountName: "นายสมชาย เจริญทรัพย์",
-      isVerified: true,
-      isDefault: true
-    },
-    {
-      id: 3,
-      restaurantId: 5,
-      restaurantName: "ขนมหวานมีนา",
-      bankName: "ธนาคารกรุงเทพ",
-      accountNumber: "xxx-x-x9012-x",
-      accountName: "นางสาวมีนา หวานใจ",
-      isVerified: false,
-      isDefault: true
+  useEffect(() => {
+    fetchPayments();
+  }, [statusFilter]);
+
+  const handleSearch = () => {
+    fetchPayments();
+  };
+
+  // Export functions
+  const exportToCSV = () => {
+    console.log('🔴 exportToCSV called');
+    if (!data || !data.payments || data.payments.length === 0) {
+      console.log('❌ No data available');
+      alert('ไม่มีข้อมูลให้ส่งออก');
+      return;
     }
-  ];
+    console.log('✅ Data available, generating CSV...');
+
+    const { payments, summary } = data;
+
+    // สร้าง CSV content
+    let csv = '\uFEFF'; // UTF-8 BOM for Excel
+    
+    // Header
+    csv += `รายงานการชำระเงิน\n`;
+    csv += `สถานะ: ${statusFilter === 'all' ? 'ทั้งหมด' : getStatusText(statusFilter as Payment['status'])}\n`;
+    csv += `วันที่ออกรายงาน: ${new Date().toLocaleDateString('th-TH', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}\n\n`;
+
+    // Summary
+    csv += `สรุปภาพรวม\n`;
+    csv += `สถานะ,จำนวนเงิน,จำนวนรายการ\n`;
+    csv += `รอชำระ,${summary.totalPending.toFixed(2)},${summary.pendingCount}\n`;
+    csv += `ชำระแล้ว,${summary.totalCompleted.toFixed(2)},${summary.completedCount}\n`;
+    csv += `ล้มเหลว,${summary.totalFailed.toFixed(2)},${summary.failedCount}\n`;
+    csv += `คืนเงินแล้ว,${summary.totalRefunded.toFixed(2)},${summary.refundedCount}\n\n`;
+
+    // Payment details
+    csv += `รายการทรานแซคชั่น\n`;
+    csv += `เลขทรานแซคชั่น,ร้านอาหาร,ลูกค้า,จำนวนเงิน,ค่าคอมมิชชั่น,ยอดสุทธิ,สถานะ,วิธีชำระ,วันที่\n`;
+    payments.forEach(payment => {
+      csv += `${payment.transactionId},${payment.restaurantName},${payment.customerName},${payment.amount.toFixed(2)},${payment.commission.toFixed(2)},${payment.netAmount.toFixed(2)},${getStatusText(payment.status)},${getPaymentMethodText(payment.paymentMethod)},${formatDate(payment.orderDate)}\n`;
+    });
+
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    console.log('Blob created, size:', blob.size);
+    
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const filename = `การชำระเงิน_${statusFilter}_${Date.now()}.csv`;
+    
+    console.log('Downloading as:', filename);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    console.log('Link clicked');
+    
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+    
+    console.log('✅ CSV export completed');
+    alert('ดาวน์โหลด CSV สำเร็จ: ' + filename);
+  };
+
+  const exportToJSON = () => {
+    console.log('🔴 exportToJSON called');
+    if (!data || !data.payments || data.payments.length === 0) {
+      console.log('❌ No data available');
+      alert('ไม่มีข้อมูลให้ส่งออก');
+      return;
+    }
+    console.log('✅ Data available, generating JSON...');
+
+    const exportData = {
+      reportInfo: {
+        filter: statusFilter,
+        generatedAt: new Date().toISOString(),
+        generatedBy: 'Finance System',
+        totalRecords: data.payments.length
+      },
+      summary: data.summary,
+      payments: data.payments,
+      pagination: data.pagination
+    };
+
+    const json = JSON.stringify(exportData, null, 2);
+    console.log('JSON generated, length:', json.length);
+    
+    const blob = new Blob([json], { type: 'application/json' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const filename = `payments_${statusFilter}_${Date.now()}.json`;
+    
+    console.log('Downloading as:', filename);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    console.log('Link clicked');
+    
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+    
+    console.log('✅ JSON export completed');
+    alert('ดาวน์โหลด JSON สำเร็จ: ' + filename);
+  };
+
+  const printReport = () => {
+    console.log('🔴 printReport called');
+    window.print();
+    console.log('✅ Print dialog opened');
+  };
+
+  // Download receipt for payment
+  const downloadPaymentReceipt = (payment: Payment) => {
+    console.log('🔴 downloadPaymentReceipt called for:', payment.transactionId);
+    
+    try {
+      const receiptText = `
+╔════════════════════════════════════╗
+║          ใบเสร็จรับเงิน           ║
+║         PAYMENT RECEIPT           ║
+╚════════════════════════════════════╝
+
+เลขที่ทรานแซคชั่น: ${payment.transactionId}
+วันที่: ${new Date(payment.orderDate).toLocaleString('th-TH', { 
+  year: 'numeric', 
+  month: 'long', 
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit'
+})}
+
+────────────────────────────────────
+ข้อมูลร้านอาหาร
+────────────────────────────────────
+ร้าน: ${payment.restaurantName}
+${payment.restaurantId ? `รหัสร้าน: ${payment.restaurantId}` : ''}
+
+────────────────────────────────────
+ข้อมูลลูกค้า
+────────────────────────────────────
+ชื่อ: ${payment.customerName}
+${payment.customerEmail ? `อีเมล: ${payment.customerEmail}` : ''}
+${payment.customerPhone ? `โทร: ${payment.customerPhone}` : ''}
+
+────────────────────────────────────
+รายละเอียดการชำระเงิน
+────────────────────────────────────
+จำนวนเงิน: ฿${payment.amount.toFixed(2)}
+ค่าคอมมิชชั่น (5%): -฿${payment.commission.toFixed(2)}
+ยอดสุทธิ: ฿${payment.netAmount.toFixed(2)}
+
+วิธีการชำระ: ${getPaymentMethodText(payment.paymentMethod)}
+สถานะ: ${getStatusText(payment.status)}
+
+${payment.paymentDate ? `วันที่ชำระเงิน: ${new Date(payment.paymentDate).toLocaleString('th-TH')}` : ''}
+${payment.settlementDate ? `วันที่เคลียร์เงิน: ${new Date(payment.settlementDate).toLocaleString('th-TH')}` : ''}
+
+${payment.notes ? `หมายเหตุ: ${payment.notes}` : ''}
+
+────────────────────────────────────
+        ขอบคุณที่ใช้บริการ
+────────────────────────────────────
+`;
+
+      console.log('Receipt text generated, length:', receiptText.length);
+
+      // Create blob with UTF-8 BOM
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + receiptText], { type: 'text/plain;charset=utf-8' });
+      console.log('Blob created, size:', blob.size);
+      
+      const url = URL.createObjectURL(blob);
+      console.log('Object URL created:', url);
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = `receipt_${payment.transactionId}_${new Date().getTime()}.txt`;
+      link.download = filename;
+      console.log('Downloading as:', filename);
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      console.log('Link clicked');
+      
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        console.log('Cleanup completed');
+      }, 100);
+      
+      console.log('✅ Receipt downloaded successfully');
+      alert('ดาวน์โหลดใบเสร็จสำเร็จ: ' + filename);
+    } catch (error) {
+      console.error('❌ Error downloading receipt:', error);
+      alert('เกิดข้อผิดพลาดในการดาวน์โหลดใบเสร็จ: ' + error);
+    }
+  };
+
+  // Approve payment
+  const handleApprovePayment = async (paymentId: number) => {
+    console.log('🔴 Approving payment:', paymentId);
+    
+    if (!confirm('คุณต้องการอนุมัติการชำระเงินนี้หรือไม่?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('กรุณาเข้าสู่ระบบ');
+        return;
+      }
+
+      // TODO: เรียก API เพื่ออนุมัติการชำระเงิน
+      // const response = await fetch(`http://localhost:4000/api/finance/payments/${paymentId}/approve`, {
+      //   method: 'PATCH',
+      //   headers: {
+      //     'Authorization': `Bearer ${token}`,
+      //     'Content-Type': 'application/json'
+      //   }
+      // });
+
+      console.log('✅ Payment approved (mock)');
+      alert('อนุมัติการชำระเงินสำเร็จ');
+      
+      // Refresh data
+      await fetchPayments();
+    } catch (error) {
+      console.error('❌ Error approving payment:', error);
+      alert('เกิดข้อผิดพลาดในการอนุมัติการชำระเงิน');
+    }
+  };
+
+  // Reject payment
+  const handleRejectPayment = async (paymentId: number) => {
+    console.log('🔴 Rejecting payment:', paymentId);
+    
+    const reason = prompt('กรุณาระบุเหตุผลในการปฏิเสธ:');
+    if (!reason) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('กรุณาเข้าสู่ระบบ');
+        return;
+      }
+
+      // TODO: เรียก API เพื่อปฏิเสธการชำระเงิน
+      // const response = await fetch(`http://localhost:4000/api/finance/payments/${paymentId}/reject`, {
+      //   method: 'PATCH',
+      //   headers: {
+      //     'Authorization': `Bearer ${token}`,
+      //     'Content-Type': 'application/json'
+      //   },
+      //   body: JSON.stringify({ reason })
+      // });
+
+      console.log('✅ Payment rejected (mock):', reason);
+      alert('ปฏิเสธการชำระเงินสำเร็จ');
+      
+      // Refresh data
+      await fetchPayments();
+    } catch (error) {
+      console.error('❌ Error rejecting payment:', error);
+      alert('เกิดข้อผิดพลาดในการปฏิเสธการชำระเงิน');
+    }
+  };
+
+  // Mock data - ในการใช้งานจริงจะดึงจาก API
+  const payments: Payment[] = data?.payments || [];
+  
+  const summary: PaymentSummary = data?.summary || {
+    totalPending: 0,
+    totalCompleted: 0,
+    totalFailed: 0,
+    totalRefunded: 0,
+    pendingCount: 0,
+    completedCount: 0,
+    failedCount: 0,
+    refundedCount: 0
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('th-TH', {
+      style: 'currency',
+      currency: 'THB',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   const getStatusColor = (status: Payment['status']) => {
     const colors = {
       pending: "bg-yellow-100 text-yellow-800",
       processing: "bg-blue-100 text-blue-800",
       completed: "bg-green-100 text-green-800",
+      paid: "bg-green-100 text-green-800",
       failed: "bg-red-100 text-red-800",
       refunded: "bg-purple-100 text-purple-800"
     };
@@ -223,6 +487,7 @@ export default function FinancePaymentsPage() {
       pending: "รอชำระ",
       processing: "กำลังประมวลผล",
       completed: "สำเร็จ",
+      paid: "ชำระแล้ว",
       failed: "ล้มเหลว",
       refunded: "คืนเงินแล้ว"
     };
@@ -234,6 +499,7 @@ export default function FinancePaymentsPage() {
       pending: <Clock className="h-4 w-4" />,
       processing: <RefreshCw className="h-4 w-4 animate-spin" />,
       completed: <CheckCircle className="h-4 w-4" />,
+      paid: <CheckCircle className="h-4 w-4" />,
       failed: <XCircle className="h-4 w-4" />,
       refunded: <ArrowDownRight className="h-4 w-4" />
     };
@@ -243,9 +509,11 @@ export default function FinancePaymentsPage() {
   const getPaymentMethodIcon = (method: Payment['paymentMethod']) => {
     const icons = {
       credit_card: "💳",
+      debit_card: "💳",
       bank_transfer: "🏦",
       promptpay: "📱",
-      cash: "💵"
+      cash: "💵",
+      wallet: "👛"
     };
     return icons[method] || icons.credit_card;
   };
@@ -253,39 +521,23 @@ export default function FinancePaymentsPage() {
   const getPaymentMethodText = (method: Payment['paymentMethod']) => {
     const texts = {
       credit_card: "บัตรเครดิต",
+      debit_card: "บัตรเดบิต",
       bank_transfer: "โอนธนาคาร",
       promptpay: "PromptPay",
-      cash: "เงินสด"
+      cash: "เงินสด",
+      wallet: "กระเป๋าเงิน"
     };
     return texts[method] || texts.credit_card;
   };
 
-  const getTypeIcon = (type: Payment['type']) => {
+  const getTypeIcon = (type?: Payment['type']) => {
+    if (!type) return <ArrowUpRight className="h-4 w-4 text-green-600" />;
     const icons = {
       payment: <ArrowUpRight className="h-4 w-4 text-green-600" />,
       refund: <ArrowDownRight className="h-4 w-4 text-red-600" />,
       adjustment: <RefreshCw className="h-4 w-4 text-blue-600" />
     };
     return icons[type] || icons.payment;
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('th-TH', {
-      style: 'currency',
-      currency: 'THB',
-      minimumFractionDigits: 0
-    }).format(Math.abs(amount));
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('th-TH', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const filteredPayments = payments.filter(payment => {
@@ -300,6 +552,26 @@ export default function FinancePaymentsPage() {
   });
 
   const selectedPayment = payments.find(p => p.id === selectedPaymentId);
+
+  if (loading) {
+    return (
+      <DashboardLayout title="การชำระเงิน">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout title="การชำระเงิน">
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </DashboardLayout>
+    );
+  }
 
   if (selectedPayment) {
     return (
@@ -414,7 +686,13 @@ export default function FinancePaymentsPage() {
                 ทำการคืนเงิน
               </Button>
             )}
-            <Button variant="outline">
+            <Button 
+              variant="outline"
+              onClick={() => {
+                console.log('🔴 Download receipt button clicked!');
+                downloadPaymentReceipt(selectedPayment);
+              }}
+            >
               <Download className="h-4 w-4 mr-1" />
               ดาวน์โหลดใบเสร็จ
             </Button>
@@ -443,27 +721,48 @@ export default function FinancePaymentsPage() {
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full md:w-[200px]">
                   <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue />
+                  <SelectValue placeholder="สถานะทั้งหมด" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">สถานะทั้งหมด</SelectItem>
                   <SelectItem value="pending">รอชำระ</SelectItem>
-                  <SelectItem value="processing">กำลังประมวลผล</SelectItem>
-                  <SelectItem value="completed">สำเร็จ</SelectItem>
+                  <SelectItem value="completed">ชำระแล้ว</SelectItem>
                   <SelectItem value="failed">ล้มเหลว</SelectItem>
                   <SelectItem value="refunded">คืนเงินแล้ว</SelectItem>
                 </SelectContent>
               </Select>
-              <Button>
-                <Download className="h-4 w-4 mr-2" />
-                ส่งออก
-              </Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button disabled={!data || !data.payments || data.payments.length === 0}>
+                    <Download className="h-4 w-4 mr-2" />
+                    ส่งออก
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>เลือกรูปแบบ</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={exportToCSV}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    ส่งออกเป็น CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportToJSON}>
+                    <FileJson className="h-4 w-4 mr-2" />
+                    ส่งออกเป็น JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={printReport}>
+                    <Printer className="h-4 w-4 mr-2" />
+                    พิมพ์รายงาน
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardContent>
         </Card>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">รอชำระ</CardTitle>
@@ -477,18 +776,7 @@ export default function FinancePaymentsPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">ประมวลผล</CardTitle>
-              <RefreshCw className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(summary.totalProcessing)}</div>
-              <p className="text-xs text-muted-foreground">{summary.processingCount} รายการ</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">สำเร็จ</CardTitle>
+              <CardTitle className="text-sm font-medium">ชำระแล้ว</CardTitle>
               <CheckCircle className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
@@ -622,11 +910,26 @@ export default function FinancePaymentsPage() {
                         <div className="text-lg font-bold">{formatCurrency(payment.amount)}</div>
                         <div className="text-sm text-muted-foreground">สุทธิ: {formatCurrency(payment.netAmount)}</div>
                         <div className="flex gap-2 mt-2">
-                          <Button size="sm">
+                          <Button 
+                            size="sm"
+                            onClick={() => handleApprovePayment(payment.id)}
+                          >
                             <CheckCircle className="h-3 w-3 mr-1" />
                             อนุมัติ
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => handleRejectPayment(payment.id)}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            ปฏิเสธ
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => setSelectedPaymentId(payment.id)}
+                          >
                             <Eye className="h-3 w-3 mr-1" />
                             ดู
                           </Button>
@@ -639,43 +942,13 @@ export default function FinancePaymentsPage() {
             </div>
           </TabsContent>
 
-          {/* Bank Accounts Tab */}
+          {/* Bank Accounts Tab - Coming Soon */}
           <TabsContent value="accounts" className="space-y-4">
-            <div className="space-y-4">
-              {bankAccounts.map((account) => (
-                <Card key={account.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                          <CreditCard className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold">{account.restaurantName}</h3>
-                          <p className="text-sm text-muted-foreground">{account.bankName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {account.accountNumber} • {account.accountName}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Badge variant={account.isVerified ? "default" : "secondary"}>
-                          {account.isVerified ? "ยืนยันแล้ว" : "รอยืนยัน"}
-                        </Badge>
-                        {account.isDefault && (
-                          <Badge variant="outline">ค่าเริ่มต้น</Badge>
-                        )}
-                        <Button size="sm" variant="outline">
-                          <Eye className="h-3 w-3 mr-1" />
-                          ดู
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <Alert>
+              <AlertDescription>
+                ฟีเจอร์การจัดการบัญชีธนาคารกำลังพัฒนา
+              </AlertDescription>
+            </Alert>
           </TabsContent>
         </Tabs>
       </div>

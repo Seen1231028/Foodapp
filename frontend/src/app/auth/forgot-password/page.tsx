@@ -83,7 +83,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">ZeenZilla</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-2">FoodFlow</h1>
           <p className="text-muted-foreground">ระบบสั่งอาหารออนไลน์</p>
         </div>
 

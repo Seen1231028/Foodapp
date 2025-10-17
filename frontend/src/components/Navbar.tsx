@@ -2,17 +2,24 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useCart } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { User, LogOut, Sun, Moon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { User, LogOut, Sun, Moon, ShoppingCart } from "lucide-react";
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { items, totalItems } = useCart();
+  const router = useRouter();
 
   if (!user) return null;
+
+  // Debug: log when totalItems changes
+  console.log('Navbar render - totalItems:', totalItems, 'items:', items.length);
 
   return (
     <header className="bg-white dark:bg-gray-900 shadow-sm border-b dark:border-gray-700 sticky top-0 z-50 transition-colors">
@@ -20,7 +27,7 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link href="/" className="hover:opacity-80 transition-opacity">
-              <h1 className="text-2xl font-bold text-primary dark:text-primary">ZeenZilla</h1>
+              <h1 className="text-2xl font-bold text-primary dark:text-primary">FoodFlow</h1>
             </Link>
             <nav className="ml-8 hidden md:flex items-center space-x-4">
               <Link href="/demo" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

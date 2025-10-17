@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from "react";
-import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -112,7 +111,9 @@ export default function ShopProfilePage() {
   };
 
   return (
-    <DashboardLayout title="ข้อมูลร้าน">
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">ข้อมูลร้าน</h1>
+      
       <div className="space-y-6">
         {/* Shop Header */}
         <Card>
@@ -545,6 +546,6 @@ export default function ShopProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }

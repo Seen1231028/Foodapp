@@ -1,12 +1,22 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Loader2 } from "lucide-react";
 import { 
   BarChart, 
   Bar, 
@@ -32,7 +42,10 @@ import {
   Download,
   Calendar,
   Filter,
-  Eye
+  Eye,
+  FileText,
+  FileJson,
+  Printer
 } from "lucide-react";
 
 interface FinancialMetrics {
@@ -55,10 +68,10 @@ interface MonthlyData {
   revenue: number;
   orders: number;
   commission: number;
-  restaurants: number;
 }
 
 interface RestaurantRevenue {
+  shopId?: number;
   name: string;
   revenue: number;
   orders: number;
@@ -70,54 +83,73 @@ interface PaymentMethodData {
   method: string;
   amount: number;
   percentage: number;
-  color: string;
+}
+
+interface ReportData {
+  metrics: FinancialMetrics;
+  monthlyData: MonthlyData[];
+  restaurantRevenue: RestaurantRevenue[];
+  paymentMethods: PaymentMethodData[];
 }
 
 export default function FinanceReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("this_month");
   const [selectedReport, setSelectedReport] = useState("overview");
+  const [data, setData] = useState<ReportData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data - ในการใช้งานจริงจะดึงจาก API
-  const metrics: FinancialMetrics = {
-    totalRevenue: 2850000,
-    totalOrders: 15420,
-    averageOrderValue: 185,
-    commission: 142500,
-    pendingPayments: 25000,
-    completedPayments: 2825000,
-    refunds: 15000,
-    growth: {
-      revenue: 12.5,
-      orders: 8.3,
-      aov: 3.8
+  const fetchReportData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('กรุณาเข้าสู่ระบบ');
+        return;
+      }
+
+      const response = await fetch(
+        `http://localhost:4000/api/finance/reports?period=${selectedPeriod}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('ไม่สามารถดึงข้อมูลรายงานได้');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setData(result.data);
+      } else {
+        setError(result.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการดึงข้อมูล');
+      console.error('Error fetching report data:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const monthlyData: MonthlyData[] = [
-    { month: "ม.ค.", revenue: 2200000, orders: 12000, commission: 110000, restaurants: 45 },
-    { month: "ก.พ.", revenue: 2350000, orders: 13200, commission: 117500, restaurants: 48 },
-    { month: "มี.ค.", revenue: 2500000, orders: 14100, commission: 125000, restaurants: 52 },
-    { month: "เม.ย.", revenue: 2400000, orders: 13800, commission: 120000, restaurants: 50 },
-    { month: "พ.ค.", revenue: 2650000, orders: 14800, commission: 132500, restaurants: 55 },
-    { month: "มิ.ย.", revenue: 2850000, orders: 15420, commission: 142500, restaurants: 58 }
-  ];
+  useEffect(() => {
+    fetchReportData();
+  }, [selectedPeriod]);
 
-  const restaurantRevenue: RestaurantRevenue[] = [
-    { name: "ร้านอาหารไทยแท้", revenue: 450000, orders: 2400, commission: 22500, status: "active" },
-    { name: "ก๋วยเตี๋ยวลุงสมชาย", revenue: 320000, orders: 5300, commission: 16000, status: "active" },
-    { name: "KFC สาขาเซ็นทรัล", revenue: 680000, orders: 2200, commission: 34000, status: "active" },
-    { name: "สเต็กบ้านป้าน้อย", revenue: 380000, orders: 1500, commission: 19000, status: "active" },
-    { name: "ขนมหวานมีนา", revenue: 220000, orders: 1800, commission: 11000, status: "active" },
-    { name: "ซูชิกิน", revenue: 520000, orders: 1400, commission: 26000, status: "active" },
-    { name: "พิซซ่าฮัท", revenue: 420000, orders: 1200, commission: 21000, status: "inactive" }
-  ];
-
-  const paymentMethods: PaymentMethodData[] = [
-    { method: "บัตรเครดิต", amount: 1420000, percentage: 49.8, color: "#8884d8" },
-    { method: "PromptPay", amount: 855000, percentage: 30.0, color: "#82ca9d" },
-    { method: "เงินสด", amount: 427500, percentage: 15.0, color: "#ffc658" },
-    { method: "TrueMoney", amount: 147500, percentage: 5.2, color: "#ff7300" }
-  ];
+  // Payment method colors
+  const paymentColors: Record<string, string> = {
+    'CREDIT_CARD': '#8884d8',
+    'DEBIT_CARD': '#82ca9d',
+    'CASH': '#ffc658',
+    'BANK_TRANSFER': '#ff7300',
+    'WALLET': '#0088aa'
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('th-TH', {
@@ -138,6 +170,145 @@ export default function FinanceReportsPage() {
   const getGrowthIcon = (growth: number) => {
     return growth >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />;
   };
+
+  // Export functions
+  const exportToCSV = () => {
+    if (!data) return;
+
+    const { metrics, monthlyData, restaurantRevenue, paymentMethods } = data;
+
+    // สร้าง CSV content
+    let csv = '\uFEFF'; // UTF-8 BOM for Excel
+    
+    // Header
+    csv += `รายงานการเงิน\n`;
+    csv += `ช่วงเวลา: ${getPeriodLabel(selectedPeriod)}\n`;
+    csv += `วันที่ออกรายงาน: ${new Date().toLocaleDateString('th-TH', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}\n\n`;
+
+    // Metrics Summary
+    csv += `สรุปภาพรวม\n`;
+    csv += `รายการ,จำนวน,การเติบโต\n`;
+    csv += `รายได้รวม,${metrics.totalRevenue.toFixed(2)},${metrics.growth.revenue.toFixed(2)}%\n`;
+    csv += `จำนวนออเดอร์,${metrics.totalOrders},${metrics.growth.orders.toFixed(2)}%\n`;
+    csv += `มูลค่าเฉลี่ยต่อออเดอร์,${metrics.averageOrderValue.toFixed(2)},${metrics.growth.aov.toFixed(2)}%\n`;
+    csv += `ค่าคอมมิชชั่น,${metrics.commission.toFixed(2)},\n`;
+    csv += `รอการชำระเงิน,${metrics.pendingPayments.toFixed(2)},\n`;
+    csv += `ชำระเงินแล้ว,${metrics.completedPayments.toFixed(2)},\n\n`;
+
+    // Monthly Data
+    csv += `รายได้รายเดือน\n`;
+    csv += `เดือน,รายได้,จำนวนออเดอร์,ค่าคอมมิชชั่น\n`;
+    monthlyData.forEach(month => {
+      csv += `${month.month},${month.revenue.toFixed(2)},${month.orders},${month.commission.toFixed(2)}\n`;
+    });
+    csv += `\n`;
+
+    // Restaurant Revenue
+    csv += `รายได้ตามร้านอาหาร\n`;
+    csv += `ร้านอาหาร,รายได้,จำนวนออเดอร์,ค่าคอมมิชชั่น,สถานะ\n`;
+    restaurantRevenue.forEach(restaurant => {
+      csv += `${restaurant.name},${restaurant.revenue.toFixed(2)},${restaurant.orders},${restaurant.commission.toFixed(2)},${restaurant.status}\n`;
+    });
+    csv += `\n`;
+
+    // Payment Methods
+    csv += `วิธีการชำระเงิน\n`;
+    csv += `วิธีการ,จำนวนเงิน,สัดส่วน\n`;
+    paymentMethods.forEach(method => {
+      csv += `${method.method},${method.amount.toFixed(2)},${method.percentage.toFixed(2)}%\n`;
+    });
+
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `รายงานการเงิน_${selectedPeriod}_${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getPeriodLabel = (period: string) => {
+    const labels: Record<string, string> = {
+      'today': 'วันนี้',
+      'yesterday': 'เมื่อวาน',
+      'this_week': 'สัปดาห์นี้',
+      'last_week': 'สัปดาห์ที่แล้ว',
+      'this_month': 'เดือนนี้',
+      'last_month': 'เดือนที่แล้ว',
+      'this_year': 'ปีนี้'
+    };
+    return labels[period] || period;
+  };
+
+  const exportToJSON = () => {
+    if (!data) return;
+
+    const exportData = {
+      reportInfo: {
+        period: getPeriodLabel(selectedPeriod),
+        periodKey: selectedPeriod,
+        generatedAt: new Date().toISOString(),
+        generatedBy: 'Finance System'
+      },
+      ...data
+    };
+
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `finance-report_${selectedPeriod}_${Date.now()}.json`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const printReport = () => {
+    window.print();
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout title="รายงานการเงิน">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout title="รายงานการเงิน">
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </DashboardLayout>
+    );
+  }
+
+  if (!data) {
+    return (
+      <DashboardLayout title="รายงานการเงิน">
+        <Alert>
+          <AlertDescription>ไม่มีข้อมูล</AlertDescription>
+        </Alert>
+      </DashboardLayout>
+    );
+  }
+
+  const { metrics, monthlyData, restaurantRevenue, paymentMethods } = data;
 
   return (
     <DashboardLayout title="รายงานการเงิน">
@@ -177,14 +348,30 @@ export default function FinanceReportsPage() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline">
-              <Eye className="h-4 w-4 mr-2" />
-              ดูรายละเอียด
+            <Button variant="outline" onClick={printReport} disabled={!data}>
+              <Printer className="h-4 w-4 mr-2" />
+              พิมพ์
             </Button>
-            <Button>
-              <Download className="h-4 w-4 mr-2" />
-              ส่งออกรายงาน
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button disabled={!data}>
+                  <Download className="h-4 w-4 mr-2" />
+                  ส่งออกรายงาน
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>เลือกรูปแบบ</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={exportToCSV}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  ส่งออกเป็น CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportToJSON}>
+                  <FileJson className="h-4 w-4 mr-2" />
+                  ส่งออกเป็น JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -291,13 +478,13 @@ export default function FinanceReportsPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ method, percentage }) => `${method} ${percentage}%`}
+                        label={({ method, percentage }) => `${method} ${percentage.toFixed(1)}%`}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="amount"
                       >
                         {paymentMethods.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                          <Cell key={`cell-${index}`} fill={paymentColors[entry.method] || '#999999'} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(value) => formatCurrency(value as number)} />
@@ -384,7 +571,7 @@ export default function FinanceReportsPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                       <span>{method.method}</span>
-                      <Badge variant="outline">{method.percentage}%</Badge>
+                      <Badge variant="outline">{method.percentage.toFixed(1)}%</Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -394,7 +581,7 @@ export default function FinanceReportsPage() {
                         className="h-2 rounded-full" 
                         style={{ 
                           width: `${method.percentage}%`, 
-                          backgroundColor: method.color 
+                          backgroundColor: paymentColors[method.method] || '#999999'
                         }}
                       />
                     </div>

@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { logActivity, LOG_ACTIONS, LOG_ENTITIES, getIpAddress, getUserAgent } from "../utils/logger";
 
 const prisma = new PrismaClient();
 
@@ -20,7 +21,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       // Validate required fields
       if (!username || !email || !password || !fullName) {
         set.status = 400;
-        return { error: "กรุณากรอกข้อมูลให้ครบถ้วน" };
+        return { success: false, error: "กรุณากรอกข้อมูลให้ครบถ้วน" };
       }
 
       // Check if user already exists
@@ -32,7 +33,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
 
       if (existingUser) {
         set.status = 400;
-        return { error: "ชื่อผู้ใช้หรืออีเมลนี้มีอยู่ในระบบแล้ว" };
+        return { success: false, error: "ชื่อผู้ใช้หรืออีเมลนี้มีอยู่ในระบบแล้ว" };
       }
 
       // Hash password with high salt rounds for security
@@ -78,19 +79,45 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       // Remove password from response
       const { password: _, ...userWithoutPassword } = user;
 
+      // Log registration
+      await logActivity({
+        userId: user.id,
+        username: user.username,
+        userRole: user.role.name,
+        action: LOG_ACTIONS.REGISTER,
+        entity: LOG_ENTITIES.USER,
+        entityId: user.id,
+        description: `ผู้ใช้ ${username} สมัครสมาชิกใหม่`,
+        metadata: { email, roleId: defaultRoleId },
+        status: 'SUCCESS',
+      });
+
       set.status = 201;
       return {
+        success: true,
         message: "สมัครสมาชิกสำเร็จ",
-        user: userWithoutPassword,
-        token
+        data: {
+          user: userWithoutPassword,
+          token
+        }
       };
     } catch (error) {
       console.error("Register error:", error);
+      
+      // Log registration failure
+      await logActivity({
+        action: LOG_ACTIONS.REGISTER,
+        entity: LOG_ENTITIES.USER,
+        description: `ลงทะเบียนล้มเหลว: ${error}`,
+        metadata: { error: String(error) },
+        status: 'FAILED',
+      });
+      
       set.status = 500;
-      return { error: "เกิดข้อผิดพลาดในการสมัครสมาชิก" };
+      return { success: false, error: "เกิดข้อผิดพลาดในการสมัครสมาชิก" };
     }
   })
-  .post("/login", async ({ body, set }) => {
+  .post("/login", async ({ body, set, request }) => {
     try {
       const { username, password } = body as {
         username: string;
@@ -99,7 +126,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
 
       if (!username || !password) {
         set.status = 400;
-        return { error: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" };
+        return { success: false, error: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" };
       }
 
       // Find user by username or email
@@ -124,15 +151,39 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       });
 
       if (!user) {
+        // Log failed login attempt
+        await logActivity({
+          action: LOG_ACTIONS.LOGIN,
+          entity: LOG_ENTITIES.USER,
+          description: `เข้าสู่ระบบล้มเหลว: ไม่พบผู้ใช้ ${username}`,
+          ipAddress: getIpAddress(request),
+          userAgent: getUserAgent(request),
+          status: 'FAILED',
+        });
+        
         set.status = 401;
-        return { error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
+        return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
       }
 
       // Verify password
       const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) {
+        // Log failed login attempt
+        await logActivity({
+          userId: user.id,
+          username: user.username,
+          userRole: user.role.name,
+          action: LOG_ACTIONS.LOGIN,
+          entity: LOG_ENTITIES.USER,
+          entityId: user.id,
+          description: `เข้าสู่ระบบล้มเหลว: รหัสผ่านไม่ถูกต้อง`,
+          ipAddress: getIpAddress(request),
+          userAgent: getUserAgent(request),
+          status: 'FAILED',
+        });
+        
         set.status = 401;
-        return { error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
+        return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
       }
 
       // Update last login
@@ -156,15 +207,32 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       // Remove password from response
       const { password: _, ...userWithoutPassword } = user;
 
+      // Log successful login
+      await logActivity({
+        userId: user.id,
+        username: user.username,
+        userRole: user.role.name,
+        action: LOG_ACTIONS.LOGIN,
+        entity: LOG_ENTITIES.USER,
+        entityId: user.id,
+        description: `ผู้ใช้ ${user.username} เข้าสู่ระบบสำเร็จ`,
+        ipAddress: getIpAddress(request),
+        userAgent: getUserAgent(request),
+        status: 'SUCCESS',
+      });
+
       return {
+        success: true,
         message: "เข้าสู่ระบบสำเร็จ",
-        user: userWithoutPassword,
-        token
+        data: {
+          user: userWithoutPassword,
+          token
+        }
       };
     } catch (error) {
       console.error("Login error:", error);
       set.status = 500;
-      return { error: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ" };
+      return { success: false, error: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ" };
     }
   })
   .post("/verify-token", async ({ headers, set }) => {
@@ -172,7 +240,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const authHeader = headers.authorization;
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         set.status = 401;
-        return { error: "ไม่พบ token การยืนยันตัวตน" };
+        return { success: false, error: "ไม่พบ token การยืนยันตัวตน" };
       }
 
       const token = authHeader.substring(7);
@@ -194,19 +262,22 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
 
       if (!user || !user.isActive) {
         set.status = 401;
-        return { error: "ผู้ใช้ไม่พบหรือถูกระงับการใช้งาน" };
+        return { success: false, error: "ผู้ใช้ไม่พบหรือถูกระงับการใช้งาน" };
       }
 
       const { password: _, ...userWithoutPassword } = user;
 
       return {
+        success: true,
         message: "Token ถูกต้อง",
-        user: userWithoutPassword
+        data: {
+          user: userWithoutPassword
+        }
       };
     } catch (error) {
       console.error("Token verification error:", error);
       set.status = 401;
-      return { error: "Token ไม่ถูกต้องหรือหมดอายุ" };
+      return { success: false, error: "Token ไม่ถูกต้องหรือหมดอายุ" };
     }
   })
   
@@ -236,6 +307,56 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       console.error("Forgot password error:", error);
       set.status = 500;
       return { error: "เกิดข้อผิดพลาดในระบบ" };
+    }
+  })
+  
+  .post("/logout", async ({ headers, request, set }) => {
+    try {
+      const authHeader = headers.authorization;
+      
+      // Try to get user info from token if available
+      let userId: number | undefined;
+      let username: string | undefined;
+      let userRole: string | undefined;
+      
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.substring(7);
+          const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key") as any;
+          userId = decoded.userId;
+          username = decoded.username;
+          userRole = decoded.role;
+        } catch (error) {
+          // Token invalid or expired, but still allow logout
+          console.log("Logout with invalid/expired token");
+        }
+      }
+      
+      // Log logout activity
+      await logActivity({
+        userId,
+        username: username || 'Unknown',
+        userRole: userRole || 'Unknown',
+        action: LOG_ACTIONS.LOGOUT,
+        entity: LOG_ENTITIES.USER,
+        entityId: userId,
+        description: userId ? `ผู้ใช้ ${username} ออกจากระบบ` : 'ผู้ใช้ออกจากระบบ',
+        ipAddress: getIpAddress(request),
+        userAgent: getUserAgent(request),
+        status: 'SUCCESS',
+      });
+      
+      return {
+        success: true,
+        message: "ออกจากระบบสำเร็จ"
+      };
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Even if logging fails, return success for logout
+      return {
+        success: true,
+        message: "ออกจากระบบสำเร็จ"
+      };
     }
   })
   

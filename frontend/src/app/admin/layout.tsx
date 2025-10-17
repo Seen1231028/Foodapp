@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard - ZeenZilla",
+  title: "Admin Dashboard - FoodFlow",
   description: "Restaurant management system for administrators",
 };
 

@@ -1,300 +1,398 @@
 'use client';
 
-import { DashboardLayout } from "@/components";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  CreditCard, 
-  Wallet, 
-  AlertTriangle,
-  Download,
-  Filter,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  Clock,
-  CheckCircle,
-  XCircle
-} from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { useState } from "react";
+import { useState, useEffect } from 'react';
+import { AppLayout } from '@/components/AppLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt, BarChart3, Download } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import authUtils from '@/utils/auth';
 
-// Mock data for financial overview
-const financialStats = [
-  { 
-    label: "รายได้รวม (เดือนนี้)", 
-    value: "฿1,245,800", 
-    change: "+12.5%",
-    changeType: "increase",
-    icon: DollarSign, 
-    color: "text-green-600" 
-  },
-  { 
-    label: "ค่าคอมมิชชั่น", 
-    value: "฿124,580", 
-    change: "+8.3%",
-    changeType: "increase",
-    icon: CreditCard, 
-    color: "text-blue-600" 
-  },
-  { 
-    label: "ยอดค้างจ่าย", 
-    value: "฿89,450", 
-    change: "-15.2%",
-    changeType: "decrease",
-    icon: Wallet, 
-    color: "text-orange-600" 
-  },
-  { 
-    label: "กำไรสุทธิ", 
-    value: "฿89,200", 
-    change: "+18.7%",
-    changeType: "increase",
-    icon: TrendingUp, 
-    color: "text-purple-600" 
-  }
-];
+// Chart colors
+const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300'];
 
-const monthlyRevenue = [
-  { month: 'ม.ค.', revenue: 950000, commission: 95000, profit: 65000 },
-  { month: 'ก.พ.', revenue: 1050000, commission: 105000, profit: 75000 },
-  { month: 'มี.ค.', revenue: 1245800, commission: 124580, profit: 89200 },
-  { month: 'เม.ย.', revenue: 1180000, commission: 118000, profit: 82000 },
-  { month: 'พ.ค.', revenue: 1320000, commission: 132000, profit: 95000 },
-  { month: 'มิ.ย.', revenue: 1450000, commission: 145000, profit: 105000 }
-];
+interface FinanceData {
+  overview: {
+    totalRevenue: number;
+    totalProfit: number;
+    totalCosts: number;
+    growthRate: number;
+  };
+  monthlyData: Array<{
+    month: string;
+    revenue: number;
+    profit: number;
+    costs: number;
+  }>;
+  paymentMethods: Array<{
+    method: string;
+    amount: number;
+    percentage: number;
+  }>;
+  recentTransactions: Array<{
+    id: number;
+    type: string;
+    description: string;
+    amount: number;
+    date: string;
+    status: string;
+  }>;
+  stats: {
+    totalUsers: number;
+    totalMenus: number;
+    totalOrders: number;
+    activeOrders: number;
+    completedOrders: number;
+  };
+}
 
-const revenueByCategory = [
-  { name: 'อาหารไทย', value: 35, amount: 435530 },
-  { name: 'อาหารฝรั่ง', value: 25, amount: 311450 },
-  { name: 'อาหารจีน', value: 20, amount: 249160 },
-  { name: 'อาหารญี่ปุ่น', value: 12, amount: 149496 },
-  { name: 'อื่นๆ', value: 8, amount: 99664 }
-];
+export default function AdminFinance() {
+  const [financeData, setFinanceData] = useState<FinanceData | null>(null);
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+  useEffect(() => {
+    const fetchFinanceData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-const transactions = [
-  {
-    id: "TXN-2024-001",
-    shop: "ร้านอาหารไทยแท้",
-    amount: 2850,
-    commission: 285,
-    type: "order",
-    status: "completed",
-    date: "2024-03-16",
-    time: "14:30"
-  },
-  {
-    id: "TXN-2024-002",
-    shop: "Pizza Corner",
-    amount: -1200,
-    commission: 0,
-    type: "refund",
-    status: "processing",
-    date: "2024-03-16",
-    time: "13:15"
-  },
-  {
-    id: "TXN-2024-003",
-    shop: "ก๋วยเตี๋ยวเรือ",
-    amount: 480,
-    commission: 48,
-    type: "order",
-    status: "completed",
-    date: "2024-03-16",
-    time: "12:45"
-  },
-  {
-    id: "TXN-2024-004",
-    shop: "Burger House",
-    amount: 1650,
-    commission: 165,
-    type: "order",
-    status: "pending",
-    date: "2024-03-16",
-    time: "11:20"
-  },
-  {
-    id: "TXN-2024-005",
-    shop: "ส้มตำนางแน่น",
-    amount: 320,
-    commission: 32,
-    type: "order",
-    status: "completed",
-    date: "2024-03-15",
-    time: "19:45"
-  }
-];
+        // Validate authentication
+        if (!authUtils.isAuthenticated()) {
+          setError('กรุณาเข้าสู่ระบบใหม่');
+          authUtils.clearAuth();
+          window.location.href = '/auth/login';
+          return;
+        }
 
-const pendingPayments = [
-  {
-    id: "PAY-2024-001",
-    shop: "ร้านอาหารไทยแท้",
-    amount: 28500,
-    dueDate: "2024-03-20",
-    daysOverdue: 0
-  },
-  {
-    id: "PAY-2024-002",
-    shop: "Pizza Corner",
-    amount: 45200,
-    dueDate: "2024-03-18",
-    daysOverdue: 2
-  },
-  {
-    id: "PAY-2024-003",
-    shop: "ก๋วยเตี๋ยวเรือ",
-    amount: 15750,
-    dueDate: "2024-03-22",
-    daysOverdue: 0
-  }
-];
+        // Fetch finance dashboard data
+        const financeResponse = await fetch('http://localhost:4000/api/finance/dashboard', {
+          headers: authUtils.getAuthHeaders()
+        });
 
-const getTransactionStatusBadge = (status: string) => {
-  switch (status) {
-    case "completed":
-      return <Badge variant="outline" className="flex items-center gap-1">
-        <CheckCircle className="h-3 w-3" />
-        สำเร็จ
-      </Badge>;
-    case "pending":
-      return <Badge variant="secondary" className="flex items-center gap-1">
-        <Clock className="h-3 w-3" />
-        รอดำเนินการ
-      </Badge>;
-    case "processing":
-      return <Badge variant="default" className="flex items-center gap-1">
-        <Clock className="h-3 w-3" />
-        กำลังประมวลผล
-      </Badge>;
-    case "failed":
-      return <Badge variant="destructive" className="flex items-center gap-1">
-        <XCircle className="h-3 w-3" />
-        ล้มเหลว
-      </Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-};
+        if (!financeResponse.ok) {
+          if (financeResponse.status === 401) {
+            setError('คุณไม่มีสิทธิ์เข้าถึงหน้านี้ กรุณาเข้าสู่ระบบด้วยบัญชี Admin');
+            authUtils.clearAuth();
+            setTimeout(() => {
+              window.location.href = '/auth/login';
+            }, 2000);
+            return;
+          }
+          throw new Error(`HTTP ${financeResponse.status}: ${financeResponse.statusText}`);
+        }
 
-const getTransactionTypeBadge = (type: string) => {
-  switch (type) {
-    case "order":
-      return <Badge variant="default">คำสั่งซื้อ</Badge>;
-    case "refund":
-      return <Badge variant="destructive">คืนเงิน</Badge>;
-    case "commission":
-      return <Badge variant="secondary">ค่าคอมมิชชั่น</Badge>;
-    default:
-      return <Badge variant="outline">{type}</Badge>;
-  }
-};
+        const financeResult = await financeResponse.json();
+        if (financeResult.success) {
+          setFinanceData(financeResult.data);
+        } else {
+          throw new Error(financeResult.error || 'เกิดข้อผิดพลาดในการดึงข้อมูลการเงิน');
+        }
 
-export default function FinanceDashboard() {
-  const [timeFilter, setTimeFilter] = useState("month");
-  const [statusFilter, setStatusFilter] = useState("all");
+        // Fetch analytics data
+        const analyticsResponse = await fetch('http://localhost:4000/api/finance/analytics', {
+          headers: authUtils.getAuthHeaders()
+        });
 
-  return (
-    <DashboardLayout title="จัดการการเงิน">
-      <div className="space-y-6">
-        {/* Financial Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {financialStats.map((stat) => {
-            const IconComponent = stat.icon;
-            return (
-              <Card key={stat.label}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">{stat.label}</p>
-                      <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                      <div className="flex items-center gap-1 mt-1">
-                        {stat.changeType === "increase" ? (
-                          <ArrowUpRight className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <ArrowDownRight className="h-4 w-4 text-red-600" />
-                        )}
-                        <span className={`text-sm ${stat.changeType === "increase" ? "text-green-600" : "text-red-600"}`}>
-                          {stat.change}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-2 bg-muted rounded-full">
-                      <IconComponent className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        if (analyticsResponse.ok) {
+          const analyticsResult = await analyticsResponse.json();
+          if (analyticsResult.success) {
+            setAnalyticsData(analyticsResult.data);
+          }
+        }
 
-        {/* Pending Payments Alert */}
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            มีการชำระเงินค้างจ่าย 2 รายการ รวม ฿60,950 โปรดตรวจสอบและดำเนินการ
-          </AlertDescription>
-        </Alert>
+      } catch (err) {
+        console.error('Finance data fetch error:', err);
+        if (err instanceof TypeError && err.message.includes('fetch')) {
+          setError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต');
+        } else {
+          setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
 
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="overview">ภาพรวม</TabsTrigger>
-            <TabsTrigger value="transactions">ธุรกรรม</TabsTrigger>
-            <TabsTrigger value="payments">การจ่ายเงิน</TabsTrigger>
-            <TabsTrigger value="analytics">วิเคราะห์</TabsTrigger>
-          </TabsList>
+    // Validate authentication with admin requirement
+    if (!authUtils.validateAuth(true)) {
+      return; // validateAuth will handle redirection
+    }
 
-          <TabsContent value="overview">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Monthly Revenue Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>รายได้รายเดือน</CardTitle>
-                  <CardDescription>เปรียบเทียบรายได้และกำไรรายเดือน</CardDescription>
+    fetchFinanceData();
+  }, []);
+
+  const getPaymentMethodName = (method: string) => {
+    switch (method) {
+      case 'CASH': return 'เงินสด';
+      case 'BANK_TRANSFER': return 'โอนเงิน';
+      case 'CREDIT_CARD': return 'บัตรเครดิต';
+      case 'DEBIT_CARD': return 'บัตรเดบิต';
+      case 'WALLET': return 'กระเป๋าเงิน';
+      default: return method;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PAID':
+        return <Badge className="bg-green-100 text-green-800">ชำระแล้ว</Badge>;
+      case 'PENDING':
+        return <Badge className="bg-yellow-100 text-yellow-800">รอชำระ</Badge>;
+      case 'FAILED':
+        return <Badge className="bg-red-100 text-red-800">ล้มเหลว</Badge>;
+      case 'REFUNDED':
+        return <Badge className="bg-blue-100 text-blue-800">คืนเงิน</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  if (loading) {
+    return (
+      <AppLayout userRole="admin">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-3xl font-bold mb-4">Finance Management</h1>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardHeader className="pb-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={monthlyRevenue}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip 
-                        formatter={(value, name) => [
-                          `฿${value.toLocaleString()}`, 
-                          name === 'revenue' ? 'รายได้' : name === 'commission' ? 'ค่าคอมมิชชั่น' : 'กำไร'
-                        ]}
-                      />
-                      <Legend />
-                      <Bar dataKey="revenue" fill="#8884d8" name="รายได้" />
-                      <Bar dataKey="commission" fill="#82ca9d" name="ค่าคอมมิชชั่น" />
-                      <Bar dataKey="profit" fill="#ffc658" name="กำไร" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppLayout userRole="admin">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-3xl font-bold mb-4">Finance Management</h1>
+          <p className="text-red-500">เกิดข้อผิดพลาด: {error}</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  return (
+    <AppLayout userRole="admin">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Finance Management</h1>
+            <p className="text-muted-foreground">ตรวจสอบยอดเงินและออกรายงานทางการเงิน</p>
+          </div>
+          <Button className="flex items-center gap-2">
+            <Download className="w-4 h-4" />
+            ออกรายงาน
+          </Button>
+        </div>
+
+        {/* Revenue Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">รายได้รวม</CardTitle>
+              <DollarSign className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                ฿{financeData?.overview?.totalRevenue?.toLocaleString() || '0'}
+              </div>
+              <p className="text-xs text-muted-foreground flex items-center">
+                <TrendingUp className="w-3 h-3 mr-1 text-green-600" />
+                +{financeData?.overview?.growthRate?.toFixed(1) || '0'}% จากเดือนที่แล้ว
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">รายได้วันนี้</CardTitle>
+              <Receipt className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                ฿{financeData?.overview?.totalProfit?.toLocaleString() || '0'}
+              </div>
+              <p className="text-xs text-muted-foreground flex items-center">
+                <TrendingUp className="w-3 h-3 mr-1 text-green-600" />
+                จากยอดขายทั้งหมด
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">การชำระเงินที่สำเร็จ</CardTitle>
+              <CreditCard className="h-4 w-4 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{financeData?.stats?.completedOrders || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                รอดำเนินการ: {financeData?.stats?.activeOrders || 0} รายการ
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">ผู้ใช้งาน</CardTitle>
+              <BarChart3 className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{financeData?.stats?.totalUsers || 0}</div>
+              <p className="text-xs text-muted-foreground">เมนูทั้งหมด: {financeData?.stats?.totalMenus || 0} รายการ</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="transactions" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="transactions">ธุรกรรมล่าสุด</TabsTrigger>
+            <TabsTrigger value="methods">วิธีการชำระเงิน</TabsTrigger>
+            <TabsTrigger value="reports">รายงาน</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="transactions" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>ธุรกรรมล่าสุด</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {financeData?.recentTransactions.map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          transaction.amount > 0 ? 'bg-green-100' : 'bg-red-100'
+                        }`}>
+                          <DollarSign className={`w-5 h-5 ${
+                            transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                          }`} />
+                        </div>
+                        <div>
+                          <p className="font-medium">{transaction.description}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {transaction.type}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(transaction.date).toLocaleString('th-TH')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-lg">
+                          ฿{transaction.amount.toLocaleString()}
+                        </p>
+                        {getStatusBadge(transaction.status)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="methods" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>สถิติการชำระเงิน</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {financeData?.paymentMethods?.map((method, index) => (
+                    <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <CreditCard className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{method.method}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {method.percentage}% ของยอดรวม
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-lg">
+                          ฿{method.amount?.toLocaleString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {method.percentage}% ของยอดรวม
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="reports" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    รายได้รายวัน
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="h-[300px] flex items-center justify-center">
+                      <div className="text-muted-foreground">กำลังโหลดข้อมูล...</div>
+                    </div>
+                  ) : error ? (
+                    <div className="h-[300px] flex items-center justify-center">
+                      <div className="text-red-500">ข้อผิดพลาด: {error}</div>
+                    </div>
+                  ) : analyticsData?.dailySalesData ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={analyticsData.dailySalesData.map((item: any) => ({ 
+                        day: item.day, 
+                        revenue: item.sales, 
+                        transactions: item.customers 
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="day" />
+                        <YAxis />
+                        <Tooltip formatter={(value, name) => [
+                          name === 'revenue' ? `฿${value.toLocaleString()}` : value,
+                          name === 'revenue' ? 'รายได้' : 'ธุรกรรม'
+                        ]} />
+                        <Area type="monotone" dataKey="revenue" stackId="1" stroke="#8884d8" fill="#8884d8" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[300px] flex items-center justify-center">
+                      <div className="text-muted-foreground">ไม่มีข้อมูล</div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Revenue by Category */}
               <Card>
                 <CardHeader>
-                  <CardTitle>รายได้ตามประเภทอาหาร</CardTitle>
-                  <CardDescription>การกระจายรายได้ตามประเภทร้านอาหาร</CardDescription>
+                  <CardTitle>สัดส่วนการชำระเงิน</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
-                        data={revenueByCategory}
+                        data={financeData?.paymentMethods?.map(method => ({
+                          name: method.method,
+                          value: method.percentage
+                        })) || []}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
@@ -303,236 +401,78 @@ export default function FinanceDashboard() {
                         fill="#8884d8"
                         dataKey="value"
                       >
-                        {revenueByCategory.map((entry, index) => (
+                        {(financeData?.paymentMethods || []).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value, name) => [`${value}%`, name]} />
+                      <Tooltip formatter={(value) => [`${value}%`, 'สัดส่วน']} />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
 
-          <TabsContent value="transactions">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div>
-                    <CardTitle>ธุรกรรมล่าสุด</CardTitle>
-                    <CardDescription>รายการธุรกรรมทั้งหมดในระบบ</CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Select value={timeFilter} onValueChange={setTimeFilter}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="day">วันนี้</SelectItem>
-                        <SelectItem value="week">สัปดาห์นี้</SelectItem>
-                        <SelectItem value="month">เดือนนี้</SelectItem>
-                        <SelectItem value="year">ปีนี้</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">ทุกสถานะ</SelectItem>
-                        <SelectItem value="completed">สำเร็จ</SelectItem>
-                        <SelectItem value="pending">รอดำเนินการ</SelectItem>
-                        <SelectItem value="processing">กำลังประมวลผล</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button variant="outline">
-                      <Download className="h-4 w-4 mr-2" />
-                      ส่งออก
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>รหัสธุรกรรม</TableHead>
-                      <TableHead>ร้านค้า</TableHead>
-                      <TableHead>ประเภท</TableHead>
-                      <TableHead>จำนวนเงิน</TableHead>
-                      <TableHead>ค่าคอมมิชชั่น</TableHead>
-                      <TableHead>สถานะ</TableHead>
-                      <TableHead>วันที่/เวลา</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactions.map((transaction) => (
-                      <TableRow key={transaction.id}>
-                        <TableCell className="font-medium">{transaction.id}</TableCell>
-                        <TableCell>{transaction.shop}</TableCell>
-                        <TableCell>{getTransactionTypeBadge(transaction.type)}</TableCell>
-                        <TableCell>
-                          <span className={transaction.amount >= 0 ? "text-green-600" : "text-red-600"}>
-                            ฿{Math.abs(transaction.amount).toLocaleString()}
-                          </span>
-                        </TableCell>
-                        <TableCell>฿{transaction.commission.toLocaleString()}</TableCell>
-                        <TableCell>{getTransactionStatusBadge(transaction.status)}</TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{new Date(transaction.date).toLocaleDateString('th-TH')}</div>
-                            <div className="text-muted-foreground">{transaction.time}</div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="payments">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div>
-                    <CardTitle>การจ่ายเงินค้างชำระ</CardTitle>
-                    <CardDescription>รายการจ่ายเงินให้ร้านค้าที่ค้างชำระ</CardDescription>
-                  </div>
-                  <Button>
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    จ่ายเงินทั้งหมด
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>รหัสการจ่าย</TableHead>
-                      <TableHead>ร้านค้า</TableHead>
-                      <TableHead>จำนวนเงิน</TableHead>
-                      <TableHead>กำหนดจ่าย</TableHead>
-                      <TableHead>สถานะ</TableHead>
-                      <TableHead>การดำเนินการ</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingPayments.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="font-medium">{payment.id}</TableCell>
-                        <TableCell>{payment.shop}</TableCell>
-                        <TableCell className="font-bold text-green-600">
-                          ฿{payment.amount.toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(payment.dueDate).toLocaleDateString('th-TH')}
-                        </TableCell>
-                        <TableCell>
-                          {payment.daysOverdue > 0 ? (
-                            <Badge variant="destructive">
-                              เกินกำหนด {payment.daysOverdue} วัน
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">ภายในกำหนด</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button size="sm">จ่ายเงิน</Button>
-                            <Button variant="outline" size="sm">ดูรายละเอียด</Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="analytics">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Growth Trend */}
+            <div className="grid grid-cols-1 gap-6 mb-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>แนวโน้มการเติบโต</CardTitle>
-                  <CardDescription>การเติบโตของรายได้ในช่วง 6 เดือนที่ผ่านมา</CardDescription>
+                  <CardTitle>รายได้และกำไรรายเดือน</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={monthlyRevenue}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip 
-                        formatter={(value, name) => [
-                          `฿${value.toLocaleString()}`, 
+                  {loading ? (
+                    <div className="h-[400px] flex items-center justify-center">
+                      <div className="text-muted-foreground">กำลังโหลดข้อมูล...</div>
+                    </div>
+                  ) : error ? (
+                    <div className="h-[400px] flex items-center justify-center">
+                      <div className="text-red-500">ข้อผิดพลาด: {error}</div>
+                    </div>
+                  ) : financeData?.monthlyData ? (
+                    <ResponsiveContainer width="100%" height={400}>
+                      <BarChart data={financeData.monthlyData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip formatter={(value, name) => [
+                          `฿${value.toLocaleString()}`,
                           name === 'revenue' ? 'รายได้' : 'กำไร'
-                        ]}
-                      />
-                      <Legend />
-                      <Line type="monotone" dataKey="revenue" stroke="#8884d8" strokeWidth={2} name="รายได้" />
-                      <Line type="monotone" dataKey="profit" stroke="#82ca9d" strokeWidth={2} name="กำไร" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* Key Insights */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>ข้อมูลเชิงลึก</CardTitle>
-                  <CardDescription>สถิติและแนวโน้มที่สำคัญ</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-4 bg-muted rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="h-5 w-5 text-green-600" />
-                      <span className="font-medium">การเติบโตที่แข็งแกร่ง</span>
+                        ]} />
+                        <Bar dataKey="revenue" fill="#8884d8" name="รายได้" />
+                        <Bar dataKey="profit" fill="#82ca9d" name="กำไร" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[400px] flex items-center justify-center">
+                      <div className="text-muted-foreground">ไม่มีข้อมูล</div>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      รายได้เพิ่มขึ้น 18.7% เมื่อเทียบกับเดือนที่แล้ว
-                    </p>
-                  </div>
-                  
-                  <div className="p-4 bg-muted rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <DollarSign className="h-5 w-5 text-blue-600" />
-                      <span className="font-medium">ค่าคอมมิชชั่นเฉลี่ย</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      10% ของยอดขาย เป็นไปตามเป้าหมาย
-                    </p>
-                  </div>
-                  
-                  <div className="p-4 bg-muted rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="h-5 w-5 text-orange-600" />
-                      <span className="font-medium">ข้อควรระวัง</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      มีการชำระเงินค้างจ่าย ควรติดตามอย่างใกล้ชิด
-                    </p>
-                  </div>
-                  
-                  <div className="p-4 bg-muted rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock className="h-5 w-5 text-purple-600" />
-                      <span className="font-medium">เวลาชำระเงินเฉลี่ย</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      2.3 วัน ซึ่งอยู่ในเกณฑ์ที่ยอมรับได้
-                    </p>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>เครื่องมือรายงาน</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Button variant="outline" className="h-20 flex flex-col">
+                    <Receipt className="w-6 h-6 mb-2" />
+                    รายงานรายวัน
+                  </Button>
+                  <Button variant="outline" className="h-20 flex flex-col">
+                    <BarChart3 className="w-6 h-6 mb-2" />
+                    รายงานรายสัปดาห์
+                  </Button>
+                  <Button variant="outline" className="h-20 flex flex-col">
+                    <DollarSign className="w-6 h-6 mb-2" />
+                    รายงานรายเดือน
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+    </AppLayout>
   );
 }

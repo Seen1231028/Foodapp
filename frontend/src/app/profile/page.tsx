@@ -1,603 +1,449 @@
 'use client';
 
-import { useState } from "react";
-import { DashboardLayout } from "@/components/DashboardLayout";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { 
-  User,
-  MapPin,
-  CreditCard,
-  Bell,
-  Shield,
-  Heart,
-  Star,
-  Plus,
-  Edit,
-  Trash2,
-  Phone,
-  Mail
-} from "lucide-react";
+import { useState, useEffect } from 'react';
+import { AppLayout } from '@/components/AppLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { AlertCircle, User, Save, X } from 'lucide-react';
+import authUtils from '@/utils/auth';
 
-interface CustomerProfile {
+interface UserProfile {
   id: number;
   username: string;
   email: string;
   fullName: string;
   phone: string;
-  dateOfBirth: string;
-  gender: string;
-  profileImage: string;
-  memberSince: string;
-  totalOrders: number;
-  favoriteCategories: string[];
-}
-
-interface DeliveryAddress {
-  id: number;
-  name: string;
-  address: string;
-  district: string;
-  province: string;
-  postalCode: string;
-  phone: string;
-  isDefault: boolean;
-  type: 'home' | 'office' | 'other';
-}
-
-interface PaymentMethod {
-  id: number;
-  type: 'credit_card' | 'debit_card' | 'promptpay' | 'true_wallet';
-  name: string;
-  details: string;
-  isDefault: boolean;
-  expiryDate?: string;
-}
-
-interface NotificationSettings {
-  orderUpdates: boolean;
-  promotions: boolean;
-  newsletter: boolean;
-  smsNotifications: boolean;
-  emailNotifications: boolean;
-  pushNotifications: boolean;
+  profileImage?: string;
+  isActive: boolean;
+  lastLogin: string;
+  createdAt: string;
+  role: {
+    id: number;
+    name: string;
+    description: string;
+  };
 }
 
 export default function ProfilePage() {
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   
-  // Mock data - ในการใช้งานจริงจะดึงจาก API
-  const [profile, setProfile] = useState<CustomerProfile>({
-    id: 1,
-    username: "customer123",
-    email: "customer@example.com",
-    fullName: "สมศรี ใจดี",
-    phone: "081-234-5678",
-    dateOfBirth: "1990-05-15",
-    gender: "female",
-    profileImage: "/user-avatar.jpg",
-    memberSince: "2023-01-15",
-    totalOrders: 45,
-    favoriteCategories: ["อาหารไทย", "ก๋วยเตี๋ยว", "ขนมหวาน"]
+  const [editForm, setEditForm] = useState({
+    fullName: '',
+    phone: '',
+    profileImage: '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
   });
 
-  const [addresses, setAddresses] = useState<DeliveryAddress[]>([
-    {
-      id: 1,
-      name: "บ้าน",
-      address: "123/45 ถนนสุขุมวิท",
-      district: "คลองตัน",
-      province: "กรุงเทพมหานคร",
-      postalCode: "10110",
-      phone: "081-234-5678",
-      isDefault: true,
-      type: "home"
-    },
-    {
-      id: 2,
-      name: "ที่ทำงาน",
-      address: "99/1 อาคารเอไอเอ ถนนพระราม 3",
-      district: "บางโพ",
-      province: "กรุงเทพมหานคร",
-      postalCode: "10160",
-      phone: "02-123-4567",
-      isDefault: false,
-      type: "office"
-    }
-  ]);
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
-    {
-      id: 1,
-      type: "credit_card",
-      name: "บัตรเครดิต KBank",
-      details: "**** **** **** 1234",
-      isDefault: true,
-      expiryDate: "12/26"
-    },
-    {
-      id: 2,
-      type: "promptpay",
-      name: "PromptPay",
-      details: "081-234-5678",
-      isDefault: false
-    }
-  ]);
+        if (!authUtils.isAuthenticated()) {
+          setError('กรุณาเข้าสู่ระบบใหม่');
+          authUtils.clearAuth();
+          window.location.href = '/auth/login';
+          return;
+        }
 
-  const [notifications, setNotifications] = useState<NotificationSettings>({
-    orderUpdates: true,
-    promotions: true,
-    newsletter: false,
-    smsNotifications: true,
-    emailNotifications: true,
-    pushNotifications: true
-  });
+        const response = await fetch('http://localhost:4000/api/users/profile', {
+          headers: authUtils.getAuthHeaders()
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            setError('คุณไม่มีสิทธิ์เข้าถึงหน้านี้ กรุณาเข้าสู่ระบบใหม่');
+            authUtils.clearAuth();
+            setTimeout(() => {
+              window.location.href = '/auth/login';
+            }, 2000);
+            return;
+          }
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        if (result.success) {
+          setProfile(result.data);
+          setEditForm({
+            fullName: result.data.fullName,
+            phone: result.data.phone || '',
+            profileImage: result.data.profileImage || '',
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: ''
+          });
+        } else {
+          throw new Error(result.error || 'เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์');
+        }
+
+      } catch (err) {
+        console.error('Profile fetch error:', err);
+        if (err instanceof TypeError && err.message.includes('fetch')) {
+          setError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต');
+        } else {
+          setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, []);
 
   const handleSaveProfile = async () => {
-    setIsSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setIsEditing(false);
-      // แสดง toast notification ว่าบันทึกสำเร็จ
-    } catch (error) {
-      console.error('Error saving profile:', error);
+      setSaving(true);
+      setError(null);
+
+      if (!editForm.fullName.trim()) {
+        setError('กรุณากรอกชื่อ-นามสกุล');
+        return;
+      }
+
+      if (editForm.newPassword && editForm.newPassword !== editForm.confirmPassword) {
+        setError('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน');
+        return;
+      }
+
+      if (editForm.newPassword && editForm.newPassword.length < 6) {
+        setError('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร');
+        return;
+      }
+
+      const updateData: any = {
+        fullName: editForm.fullName.trim(),
+        phone: editForm.phone.trim(),
+        profileImage: editForm.profileImage.trim()
+      };
+
+      if (editForm.newPassword) {
+        updateData.currentPassword = editForm.currentPassword;
+        updateData.newPassword = editForm.newPassword;
+      }
+
+      const response = await fetch('http://localhost:4000/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          ...authUtils.getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setProfile(result.data);
+        setEditing(false);
+        setEditForm(prev => ({
+          ...prev,
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
+        }));
+        alert('อัปเดตโปรไฟล์สำเร็จ');
+      } else {
+        setError(result.error || 'เกิดข้อผิดพลาดในการอัปเดตโปรไฟล์');
+      }
+    } catch (err) {
+      console.error('Profile update error:', err);
+      setError('เกิดข้อผิดพลาดในการอัปเดตโปรไฟล์');
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  const handleNotificationChange = (key: keyof NotificationSettings, value: boolean) => {
-    setNotifications(prev => ({
-      ...prev,
-      [key]: value
-    }));
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setError(null);
+    if (profile) {
+      setEditForm({
+        fullName: profile.fullName,
+        phone: profile.phone || '',
+        profileImage: profile.profileImage || '',
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+    }
   };
 
-  const getAddressTypeIcon = (type: DeliveryAddress['type']) => {
-    const icons = {
-      home: "🏠",
-      office: "🏢",
-      other: "📍"
-    };
-    return icons[type];
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'admin': return 'bg-red-100 text-red-800';
+      case 'shop_owner': return 'bg-blue-100 text-blue-800';
+      case 'finance': return 'bg-green-100 text-green-800';
+      case 'customer': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
-  const getPaymentTypeIcon = (type: PaymentMethod['type']) => {
-    const icons = {
-      credit_card: "💳",
-      debit_card: "💳",
-      promptpay: "📱",
-      true_wallet: "💰"
-    };
-    return icons[type];
+  const getRoleName = (role: string) => {
+    switch (role) {
+      case 'admin': return 'ผู้ดูแลระบบ';
+      case 'shop_owner': return 'เจ้าของร้าน';
+      case 'finance': return 'ฝ่ายการเงิน';
+      case 'customer': return 'ลูกค้า';
+      default: return role;
+    }
   };
 
-  const formatMemberSince = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('th-TH', {
-      year: 'numeric',
-      month: 'long'
-    });
-  };
+  if (loading) {
+    return (
+      <AppLayout userRole={authUtils.getCurrentUser()?.role?.name || 'guest'}>
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold mb-6">โปรไฟล์ของฉัน</h1>
+          <Card className="animate-pulse">
+            <CardHeader>
+              <div className="h-6 bg-gray-200 rounded w-1/4"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="h-20 bg-gray-200 rounded"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppLayout userRole={authUtils.getCurrentUser()?.role?.name || 'guest'}>
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold mb-6">โปรไฟล์ของฉัน</h1>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center space-x-2 text-red-600">
+                <AlertCircle className="w-4 h-4" />
+                <span>{error}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <AppLayout userRole={authUtils.getCurrentUser()?.role?.name || 'guest'}>
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold mb-6">โปรไฟล์ของฉัน</h1>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-center text-muted-foreground">ไม่พบข้อมูลโปรไฟล์</p>
+            </CardContent>
+          </Card>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
-    <DashboardLayout title="โปรไฟล์">
-      <div className="space-y-6">
-        {/* Profile Header */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row gap-6">
-              <div className="flex-shrink-0">
-                <Avatar className="w-24 h-24">
-                  <AvatarImage src={profile.profileImage} alt={profile.fullName} />
-                  <AvatarFallback className="text-2xl">
-                    {profile.fullName.charAt(0)}
+    <AppLayout userRole={authUtils.getCurrentUser()?.role?.name || 'guest'}>
+      <div className="max-w-4xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">โปรไฟล์ของฉัน</h1>
+          {!editing && (
+            <Button onClick={() => setEditing(true)}>
+              <User className="w-4 h-4 mr-2" />
+              แก้ไขโปรไฟล์
+            </Button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Profile Info Card */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>ข้อมูลส่วนตัว</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Profile Image */}
+              <div className="flex items-center space-x-4">
+                <Avatar className="w-20 h-20">
+                  <AvatarImage src={editing ? editForm.profileImage : profile.profileImage} />
+                  <AvatarFallback className="text-lg">
+                    {profile.fullName.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-              </div>
-              
-              <div className="flex-1">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h1 className="text-2xl font-bold text-card-foreground">{profile.fullName}</h1>
-                    <p className="text-muted-foreground">@{profile.username}</p>
-                    <div className="flex items-center gap-4 mt-2">
-                      <Badge variant="outline">
-                        สมาชิกตั้งแต่ {formatMemberSince(profile.memberSince)}
-                      </Badge>
-                      <Badge variant="secondary">
-                        {profile.totalOrders} ออเดอร์
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <Button 
-                      variant={isEditing ? "outline" : "default"}
-                      onClick={() => setIsEditing(!isEditing)}
-                    >
-                      {isEditing ? "ยกเลิก" : "แก้ไขข้อมูล"}
-                    </Button>
-                    {isEditing && (
-                      <Button 
-                        onClick={handleSaveProfile}
-                        disabled={isSaving}
-                      >
-                        {isSaving ? "กำลังบันทึก..." : "บันทึก"}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Tabs defaultValue="personal" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="personal">ข้อมูลส่วนตัว</TabsTrigger>
-            <TabsTrigger value="addresses">ที่อยู่</TabsTrigger>
-            <TabsTrigger value="payments">การชำระเงิน</TabsTrigger>
-            <TabsTrigger value="settings">การตั้งค่า</TabsTrigger>
-          </TabsList>
-
-          {/* Personal Information */}
-          <TabsContent value="personal" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  ข้อมูลส่วนตัว
-                </CardTitle>
-                <CardDescription>
-                  จัดการข้อมูลส่วนตัวของคุณ
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {editing && (
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">ชื่อ-นามสกุล</Label>
+                    <Label htmlFor="profileImage">URL รูปโปรไฟล์</Label>
+                    <Input
+                      id="profileImage"
+                      type="url"
+                      placeholder="https://example.com/avatar.jpg"
+                      value={editForm.profileImage}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, profileImage: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">ชื่อ-นามสกุล</Label>
+                  {editing ? (
                     <Input
                       id="fullName"
-                      value={profile.fullName}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile(prev => ({...prev, fullName: e.target.value}))}
-                      disabled={!isEditing}
+                      value={editForm.fullName}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, fullName: e.target.value }))}
+                      required
                     />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="username">ชื่อผู้ใช้</Label>
-                    <Input
-                      id="username"
-                      value={profile.username}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile(prev => ({...prev, username: e.target.value}))}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">อีเมล</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profile.email}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile(prev => ({...prev, email: e.target.value}))}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">เบอร์โทรศัพท์</Label>
-                    <Input
-                      id="phone"
-                      value={profile.phone}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile(prev => ({...prev, phone: e.target.value}))}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="dateOfBirth">วันเกิด</Label>
-                    <Input
-                      id="dateOfBirth"
-                      type="date"
-                      value={profile.dateOfBirth}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile(prev => ({...prev, dateOfBirth: e.target.value}))}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="gender">เพศ</Label>
-                    <Select 
-                      value={profile.gender} 
-                      onValueChange={(value) => setProfile(prev => ({...prev, gender: value}))}
-                      disabled={!isEditing}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="male">ชาย</SelectItem>
-                        <SelectItem value="female">หญิง</SelectItem>
-                        <SelectItem value="other">อื่นๆ</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  ) : (
+                    <p className="p-2 bg-gray-50 rounded">{profile.fullName}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label>หมวดหมู่อาหารที่ชอบ</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {profile.favoriteCategories.map((category, index) => (
-                      <Badge key={index} variant="secondary">
-                        <Heart className="h-3 w-3 mr-1" />
-                        {category}
-                      </Badge>
-                    ))}
-                  </div>
+                  <Label htmlFor="username">ชื่อผู้ใช้</Label>
+                  <p className="p-2 bg-gray-100 rounded text-muted-foreground">{profile.username}</p>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
-          {/* Delivery Addresses */}
-          <TabsContent value="addresses" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">ที่อยู่จัดส่ง</h2>
-                <p className="text-sm text-muted-foreground">จัดการที่อยู่สำหรับการจัดส่ง</p>
-              </div>
-              <Button>
-                <Plus className="h-4 w-4 mr-1" />
-                เพิ่มที่อยู่
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {addresses.map((address) => (
-                <Card key={address.id} className={address.isDefault ? "ring-2 ring-primary" : ""}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{getAddressTypeIcon(address.type)}</span>
-                        <div>
-                          <h3 className="font-medium">{address.name}</h3>
-                          {address.isDefault && (
-                            <Badge variant="default" className="text-xs">ค่าเริ่มต้น</Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-red-500">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1 text-sm">
-                      <p>{address.address}</p>
-                      <p>{address.district} {address.province} {address.postalCode}</p>
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Phone className="h-3 w-3" />
-                        <span>{address.phone}</span>
-                      </div>
-                    </div>
-                    
-                    {!address.isDefault && (
-                      <Button variant="outline" size="sm" className="w-full mt-3">
-                        ตั้งเป็นค่าเริ่มต้น
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* Payment Methods */}
-          <TabsContent value="payments" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">วิธีการชำระเงิน</h2>
-                <p className="text-sm text-muted-foreground">จัดการวิธีการชำระเงินของคุณ</p>
-              </div>
-              <Button>
-                <Plus className="h-4 w-4 mr-1" />
-                เพิ่มการชำระเงิน
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {paymentMethods.map((method) => (
-                <Card key={method.id} className={method.isDefault ? "ring-2 ring-primary" : ""}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{getPaymentTypeIcon(method.type)}</span>
-                        <div>
-                          <h3 className="font-medium">{method.name}</h3>
-                          <p className="text-sm text-muted-foreground">{method.details}</p>
-                          {method.expiryDate && (
-                            <p className="text-xs text-muted-foreground">หมดอายุ {method.expiryDate}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-red-500">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    {method.isDefault && (
-                      <Badge variant="default" className="text-xs">ค่าเริ่มต้น</Badge>
-                    )}
-                    
-                    {!method.isDefault && (
-                      <Button variant="outline" size="sm" className="w-full mt-3">
-                        ตั้งเป็นค่าเริ่มต้น
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* Settings */}
-          <TabsContent value="settings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5" />
-                  การแจ้งเตือน
-                </CardTitle>
-                <CardDescription>
-                  จัดการการแจ้งเตือนที่คุณต้องการรับ
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>อัปเดตสถานะออเดอร์</Label>
-                      <p className="text-sm text-muted-foreground">
-                        รับการแจ้งเตือนเมื่อสถานะออเดอร์เปลี่ยนแปลง
-                      </p>
-                    </div>
-                    <Switch
-                      checked={notifications.orderUpdates}
-                      onCheckedChange={(checked) => handleNotificationChange('orderUpdates', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>โปรโมชั่นและข้อเสนอพิเศษ</Label>
-                      <p className="text-sm text-muted-foreground">
-                        รับข้อมูลโปรโมชั่นและส่วนลดจากร้านอาหาร
-                      </p>
-                    </div>
-                    <Switch
-                      checked={notifications.promotions}
-                      onCheckedChange={(checked) => handleNotificationChange('promotions', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>จดหมายข่าว</Label>
-                      <p className="text-sm text-muted-foreground">
-                        รับข้อมูลข่าวสารและอัปเดตใหม่ๆ
-                      </p>
-                    </div>
-                    <Switch
-                      checked={notifications.newsletter}
-                      onCheckedChange={(checked) => handleNotificationChange('newsletter', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>การแจ้งเตือนทาง SMS</Label>
-                      <p className="text-sm text-muted-foreground">
-                        รับการแจ้งเตือนสำคัญทาง SMS
-                      </p>
-                    </div>
-                    <Switch
-                      checked={notifications.smsNotifications}
-                      onCheckedChange={(checked) => handleNotificationChange('smsNotifications', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>การแจ้งเตือนทางอีเมล</Label>
-                      <p className="text-sm text-muted-foreground">
-                        รับการแจ้งเตือนทางอีเมล
-                      </p>
-                    </div>
-                    <Switch
-                      checked={notifications.emailNotifications}
-                      onCheckedChange={(checked) => handleNotificationChange('emailNotifications', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>การแจ้งเตือนแบบ Push</Label>
-                      <p className="text-sm text-muted-foreground">
-                        รับการแจ้งเตือนผ่านแอป
-                      </p>
-                    </div>
-                    <Switch
-                      checked={notifications.pushNotifications}
-                      onCheckedChange={(checked) => handleNotificationChange('pushNotifications', checked)}
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">อีเมล</Label>
+                  <p className="p-2 bg-gray-100 rounded text-muted-foreground">{profile.email}</p>
                 </div>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  ความปลอดภัย
-                </CardTitle>
-                <CardDescription>
-                  จัดการการตั้งค่าความปลอดภัยของบัญชี
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button variant="outline" className="w-full">
-                  เปลี่ยนรหัสผ่าน
-                </Button>
-                <Button variant="outline" className="w-full">
-                  ตั้งค่าการยืนยันตัวตนสองขั้นตอน
-                </Button>
-                <Button variant="outline" className="w-full">
-                  ดูอุปกรณ์ที่เข้าสู่ระบบ
-                </Button>
-              </CardContent>
-            </Card>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">เบอร์โทรศัพท์</Label>
+                  {editing ? (
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                    />
+                  ) : (
+                    <p className="p-2 bg-gray-50 rounded">{profile.phone || 'ไม่ได้ระบุ'}</p>
+                  )}
+                </div>
+              </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-red-600">เขตอันตราย</CardTitle>
-                <CardDescription>
-                  การดำเนินการเหล่านี้ไม่สามารถย้อนกลับได้
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button variant="destructive">
-                  ลบบัญชี
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              {/* Password Change (only when editing) */}
+              {editing && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">เปลี่ยนรหัสผ่าน (ไม่บังคับ)</h3>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="currentPassword">รหัสผ่านปัจจุบัน</Label>
+                      <Input
+                        id="currentPassword"
+                        type="password"
+                        value={editForm.currentPassword}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, currentPassword: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">รหัสผ่านใหม่</Label>
+                        <Input
+                          id="newPassword"
+                          type="password"
+                          value={editForm.newPassword}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">ยืนยันรหัสผ่านใหม่</Label>
+                        <Input
+                          id="confirmPassword"
+                          type="password"
+                          value={editForm.confirmPassword}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Action Buttons */}
+              {editing && (
+                <div className="flex justify-end space-x-3 pt-4">
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    <X className="w-4 h-4 mr-2" />
+                    ยกเลิก
+                  </Button>
+                  <Button onClick={handleSaveProfile} disabled={saving}>
+                    <Save className="w-4 h-4 mr-2" />
+                    {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+                  </Button>
+                </div>
+              )}
+
+              {error && (
+                <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{error}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Account Info Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>ข้อมูลบัญชี</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>สถานะบัญชี</Label>
+                <Badge className={profile.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                  {profile.isActive ? 'ใช้งานอยู่' : 'ถูกระงับ'}
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <Label>บทบาท</Label>
+                <Badge className={getRoleBadgeColor(profile.role.name)}>
+                  {getRoleName(profile.role.name)}
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <Label>เข้าสู่ระบบล่าสุด</Label>
+                <p className="text-sm text-muted-foreground">
+                  {profile.lastLogin ? new Date(profile.lastLogin).toLocaleString('th-TH') : 'ไม่เคยเข้าสู่ระบบ'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>สมัครสมาชิกเมื่อ</Label>
+                <p className="text-sm text-muted-foreground">
+                  {new Date(profile.createdAt).toLocaleString('th-TH')}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </DashboardLayout>
+    </AppLayout>
   );
 }

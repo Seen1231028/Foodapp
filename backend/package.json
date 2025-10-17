@@ -12,15 +12,18 @@
     "db:seed": "bunx prisma db seed"
   },
   "prisma": {
-    "seed": "bun run prisma/seed.ts"
+    "seed": "bunx tsx prisma/seed.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",
     "@elysiajs/jwt": "^1.4.0",
+    "@elysiajs/static": "^1.4.0",
     "@prisma/client": "^5.22.0",
+    "@types/multer": "^2.0.0",
     "bcryptjs": "^2.4.3",
     "elysia": "latest",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

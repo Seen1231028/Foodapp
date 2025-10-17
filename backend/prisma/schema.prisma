@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -20,20 +21,22 @@ model Role {
 }
 
 model User {
-  id         Int       @id @default(autoincrement())
-  username   String    @unique
-  email      String    @unique
-  password   String    // Will be hashed
-  fullName   String
-  phone      String?
-  isActive   Boolean   @default(true)
-  lastLogin  DateTime?
-  roleId     Int
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  email        String    @unique
+  password     String    // Will be hashed
+  fullName     String
+  phone        String?
+  profileImage String?   // URL to profile image
+  isActive     Boolean   @default(true)
+  lastLogin    DateTime?
+  roleId       Int
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   
   role   Role    @relation(fields: [roleId], references: [id])
   orders Order[]
+  shops  Shop[]  @relation("UserShops")
   
   @@map("users")
 }
@@ -61,13 +64,31 @@ model Menu {
   isActive     Boolean  @default(true)
   preparationTime Int   @default(15) // minutes
   categoryId   Int
+  shopId       Int?     // Optional relation to a shop (restaurant)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
   category   Category    @relation(fields: [categoryId], references: [id])
+  shop       Shop?       @relation(fields: [shopId], references: [id])
   orderItems OrderItem[]
   
   @@map("menus")
+}
+
+model Shop {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  image       String?   // URL for shop banner / cover
+  isActive    Boolean   @default(true)
+  ownerId     Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  owner  User? @relation(name: "UserShops", fields: [ownerId], references: [id])
+  menus  Menu[]
+
+  @@map("shops")
 }
 
 model Order {
@@ -126,6 +147,28 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
   
   @@map("system_settings")
+}
+
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?     // null ถ้าเป็น system action
+  username    String?  // เก็บ username ไว้สำหรับการแสดงผล
+  userRole    String?  // admin, shop_owner, customer, finance
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, APPROVE, REJECT, etc.
+  entity      String   // User, Order, Menu, Payment, Shop, etc.
+  entityId    Int?     // ID ของ entity ที่ถูกกระทำ
+  description String   // คำอธิบายการกระทำ เช่น "สร้างออเดอร์ #123"
+  metadata    String?  @db.Text // JSON string เก็บข้อมูลเพิ่มเติม
+  ipAddress   String?  // IP Address ของผู้ใช้
+  userAgent   String?  @db.Text // Browser/Device info
+  status      String   @default("SUCCESS") // SUCCESS, FAILED, WARNING
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("activity_logs")
 }
 
 // Enums

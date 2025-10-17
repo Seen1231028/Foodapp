@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { CartProvider } from '@/contexts/CartContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,29 +27,31 @@ export function Providers({ children, toasterPosition = 'top-right' }: Providers
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          {children}
-          <Toaster
-            position={toasterPosition}
-            toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#363636',
-              color: '#fff',
-            },
-            success: {
+          <CartProvider>
+            {children}
+            <Toaster
+              position={toasterPosition}
+              toastOptions={{
+              duration: 4000,
               style: {
-                background: '#10b981',
+                background: '#363636',
+                color: '#fff',
               },
-            },
-            error: {
-              style: {
-                background: '#ef4444',
+              success: {
+                style: {
+                  background: '#10b981',
+                },
               },
-            },
-          }}
-        />
-      </AuthProvider>
-    </QueryClientProvider>
+              error: {
+                style: {
+                  background: '#ef4444',
+                },
+              },
+            }}
+          />
+          </CartProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </ThemeProvider>
   )
 }
